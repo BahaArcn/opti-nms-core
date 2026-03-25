@@ -1,0 +1,152 @@
+spring:
+  application:
+    name: Opti-NMS-Core
+
+  # ============================================
+  # MONGODB CONFIGURATION
+  # ✅ Environment Variables kullanıyoruz
+  # ============================================
+  data:
+    mongodb:
+      uri: mongodb://${MONGO_USERNAME:admin}:${MONGO_PASSWORD:password}@${MONGO_HOST:localhost}:${MONGO_PORT:27017}/${MONGO_DATABASE:optinms_db}?authSource=admin
+      auto-index-creation: true # Development için true, Production'da false olmalı
+
+  # ============================================
+  # JACKSON JSON CONFIGURATION
+  # ============================================
+  jackson:
+    # ✅ null değerleri JSON'da gösterme (cleaner response)
+    default-property-inclusion: non_null
+    # ✅ Date/Time formatı (ISO 8601 standard)
+    date-format: yyyy-MM-dd'T'HH:mm:ss.SSS'Z'
+    time-zone: UTC
+    # ✅ Pretty print (development için okunabilir JSON)
+    serialization:
+      indent_output: true
+
+# ============================================
+# SERVER CONFIGURATION
+# ============================================
+server:
+  port: ${SERVER_PORT:8080}
+
+  # ✅ Graceful shutdown
+  shutdown: graceful
+
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+
+# ============================================
+# MANAGEMENT (ACTUATOR) CONFIGURATION
+# ✅ Health check endpoints
+# ============================================
+management:
+  endpoints:
+    web:
+      base-path: /actuator
+      exposure:
+        # ✅ Expose edilen endpoint'ler
+        include: health,info,metrics
+
+  endpoint:
+    health:
+      # ✅ Detaylı health bilgisi
+      show-details: always
+      show-components: always
+
+  # ✅ Health indicators
+  health:
+    mongo:
+      enabled: true
+    diskspace:
+      enabled: true
+
+# ============================================
+# LOGGING CONFIGURATION
+# ============================================
+logging:
+  level:
+    root: INFO
+    com.opticoms.optinmscore: DEBUG # Kendi package'ımız için DEBUG
+    org.springframework.data.mongodb: DEBUG # MongoDB query'leri göster
+    org.springframework.web: INFO
+
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# ============================================
+# SPRINGDOC (SWAGGER/OPENAPI) CONFIGURATION
+# ============================================
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: true
+
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operations-sorter: alpha
+    tags-sorter: alpha
+    try-it-out-enabled: true
+
+# ============================================
+# APPLICATION CUSTOM PROPERTIES
+# ✅ Environment Variables kullanıyoruz
+# ============================================
+app:
+  default-admin:
+    password: ${DEFAULT_ADMIN_PASSWORD:#{null}}
+  security:
+    master-key: ${ENCRYPTION_SECRET}
+    jwt:
+      secret: ${JWT_SECRET}
+      expiration-ms: ${JWT_EXPIRATION:86400000}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+  self-address: ${APP_SELF_ADDRESS:http://localhost:8080}
+  master-token: ${APP_MASTER_TOKEN}
+  docker-image: ${APP_DOCKER_IMAGE:opticoms/optinms-core}
+  docker-tag: ${APP_DOCKER_TAG:latest}
+  update:
+    deployment-name: ${APP_UPDATE_DEPLOYMENT:optinms-core}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    store: ${RATE_LIMIT_STORE:memory}
+    requests-per-window: ${RATE_LIMIT_REQUESTS:100}
+    window-seconds: ${RATE_LIMIT_WINDOW:60}
+    auth-requests-per-window: ${RATE_LIMIT_AUTH_REQUESTS:5}
+    auth-window-seconds: ${RATE_LIMIT_AUTH_WINDOW:60}
+    cleanup-interval-minutes: ${RATE_LIMIT_CLEANUP_MINUTES:5}
+
+# ============================================
+# OPEN5GS INTEGRATION
+# ============================================
+open5gs:
+  upf:
+    metrics-url: ${OPEN5GS_UPF_METRICS_URL:}
+  sync:
+    interval-ms: ${OPEN5GS_SYNC_INTERVAL:30000}
+  metrics:
+    scrape-interval-ms: ${OPEN5GS_METRICS_SCRAPE_INTERVAL:30000}
+
+# ============================================
+# FIREWALL MANAGEMENT CONFIGURATION
+# ============================================
+firewall:
+  apply-enabled: ${FIREWALL_APPLY_ENABLED:false}
+
+# ============================================
+# KUBERNETES DEPLOY CONFIGURATION
+# ============================================
+kubernetes:
+  # Namespace where Open5GS NFs are running
+  namespace: ${K8S_NAMESPACE:open5gs}
+  # Auto-detection priority:
+  # 1. In-cluster: /var/run/secrets/kubernetes.io/serviceaccount/ (when running as K8s pod)
+  # 2. Local dev:  KUBECONFIG env var or ~/.kube/config
+  # No explicit kubeconfig path needed — Fabric8 handles auto-detection
+  deploy:
+    # Set to false to disable actual K8s apply (dry-run mode for dev/test)
+    enabled: ${K8S_DEPLOY_ENABLED:false}

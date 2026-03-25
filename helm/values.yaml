@@ -1,0 +1,36 @@
+replicaCount: 1
+
+image:
+  repository: opticoms/optinms-core
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  host: optinms.local
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+env:
+  MONGO_HOST: mongodb
+  MONGO_PORT: "27017"
+  MONGO_DATABASE: optinms_db
+  SPRING_PROFILES_ACTIVE: prod
+  K8S_DEPLOY_ENABLED: "true"
+  FIREWALL_APPLY_ENABLED: "false"
+
+secrets:
+  MONGO_USERNAME: admin
+  MONGO_PASSWORD: changeme
+  ENCRYPTION_SECRET: changeme-32chars-minimum-key-here
+  JWT_SECRET: changeme-jwt-secret-hex-string-here

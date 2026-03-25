@@ -1,0 +1,18 @@
+# ============================================
+# DEV PROFILE - SSH Tunnel to Open5GS K8s
+# ============================================
+# Port mapping (SSH tunnel setup):
+#   localhost:27017 → Open5GS MongoDB (K8s via SSH tunnel)
+#   localhost:27018 → OptiNMS MongoDB  (local Docker)
+#   localhost:9090  → AMF InfoAPI     (K8s via SSH tunnel)
+#   localhost:9091  → SMF InfoAPI     (K8s via SSH tunnel)
+# ============================================
+
+spring:
+  data:
+    mongodb:
+      uri: mongodb://${MONGO_USERNAME:admin}:${MONGO_PASSWORD:password}@${MONGO_HOST:localhost}:${MONGO_PORT:27018}/${MONGO_DATABASE:optinms_db}?authSource=admin
+
+open5gs:
+  mongo:
+    uri: ${OPEN5GS_MONGO_URI:mongodb://localhost:27017/open5gs}
