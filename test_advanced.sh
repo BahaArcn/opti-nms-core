@@ -388,6 +388,10 @@ echo ">> 9.1 Yeni tenant olustur (silinecek)"
 R=$(req -X POST $BASE/api/v1/system/tenants -H "Authorization: Bearer $SA_TOKEN" -H 'Content-Type: application/json' \
   -d '{"tenantId":"TEST-9999/0001/01","name":"Test Tenant","amfUrl":"http://10.0.9.1:7777","smfUrl":"http://10.0.9.2:7777","adminUsername":"test_tenant_admin","adminEmail":"admin@test-tenant.com","adminPassword":"TestTenant2026!"}')
 check_ok "Test tenant olusturuldu" "$(get_code "$R")" "$(get_body "$R")"
+TEST_TENANT_ID=$(echo "$(get_body "$R")" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+if [ -z "$TEST_TENANT_ID" ]; then
+  TEST_TENANT_ID=$(curl -s "$BASE/api/v1/system/tenants" -H "Authorization: Bearer $SA_TOKEN" | grep -o '"id":"[^"]*","tenantId":"TEST-9999/0001/01"' | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+fi
 
 echo ">> 9.2 Test tenant ile login"
 R=$(req -X POST $BASE/api/v1/auth/login -H 'Content-Type: application/json' \
@@ -396,16 +400,16 @@ TT_TOKEN=$(get_token "$(get_body "$R")")
 if [ -n "$TT_TOKEN" ]; then green "Test tenant admin login basarili"
 else check_ok "Test tenant login" "$(get_code "$R")" "$(get_body "$R")"; fi
 
-echo ">> 9.3 Tenant guncelle (isim degistir)"
-R=$(req -X PUT "$BASE/api/v1/system/tenants/TEST-9999/0001/01" -H "Authorization: Bearer $SA_TOKEN" -H 'Content-Type: application/json' \
+echo ">> 9.3 Tenant guncelle (isim degistir) [using MongoDB _id: $TEST_TENANT_ID]"
+R=$(req -X PUT "$BASE/api/v1/system/tenants/$TEST_TENANT_ID" -H "Authorization: Bearer $SA_TOKEN" -H 'Content-Type: application/json' \
   -d '{"tenantId":"TEST-9999/0001/01","name":"Updated Test Tenant","amfUrl":"http://10.0.9.1:7777","smfUrl":"http://10.0.9.2:7777","active":true}')
 B=$(get_body "$R"); C=$(get_code "$R")
 if [ "$C" = "200" ] && echo "$B" | grep -q "Updated"; then green "Tenant guncellendi (isim degisti)"
 elif [ "$C" = "200" ]; then green "Tenant guncellendi [HTTP $C]"
 else red "Tenant guncellenemedi [HTTP $C]"; echo "  $(echo "$B" | head -c 200)"; fi
 
-echo ">> 9.4 Tenant devre disi birak (soft delete)"
-R=$(req -X DELETE "$BASE/api/v1/system/tenants/TEST-9999/0001/01" -H "Authorization: Bearer $SA_TOKEN")
+echo ">> 9.4 Tenant devre disi birak (soft delete) [using MongoDB _id: $TEST_TENANT_ID]"
+R=$(req -X DELETE "$BASE/api/v1/system/tenants/$TEST_TENANT_ID" -H "Authorization: Bearer $SA_TOKEN")
 C=$(get_code "$R"); B=$(get_body "$R")
 if [ "$C" = "200" ] && echo "$B" | grep -q "false\|active"; then green "Tenant devre disi birakildi"
 elif [ "$C" = "200" ] || [ "$C" = "204" ]; then green "Tenant deactivate [HTTP $C]"
