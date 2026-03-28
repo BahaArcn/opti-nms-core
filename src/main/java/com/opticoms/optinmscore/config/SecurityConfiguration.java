@@ -73,8 +73,9 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/v1/network/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/network/**").hasAnyRole("ADMIN", "OPERATOR", "VIEWER")
 
-                        // Alarms: all authenticated users can read, ADMIN + OPERATOR can write
+                        // Alarms: all authenticated users can read, ADMIN + OPERATOR can write/acknowledge
                         .requestMatchers(HttpMethod.POST, "/api/v1/fault/**").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/fault/**").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.GET, "/api/v1/fault/**").authenticated()
 
                         // Performance metrics: all authenticated users can read
@@ -112,6 +113,23 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.PUT, "/api/v1/apn/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/apn/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/apn/**").hasAnyRole("ADMIN", "OPERATOR", "VIEWER")
+
+                        // Edge location management: ADMIN for write, all roles for read
+                        .requestMatchers(HttpMethod.POST, "/api/v1/edge-locations/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/edge-locations/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/edge-locations/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/edge-locations/**").hasAnyRole("ADMIN", "OPERATOR", "VIEWER")
+
+                        // Policy management: ADMIN for write, OPERATOR+ for read
+                        .requestMatchers(HttpMethod.POST, "/api/v1/policies/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/policies/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/policies/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/policies/**").hasAnyRole("ADMIN", "OPERATOR")
+
+                        // License management: ADMIN for write, OPERATOR+ for read/status
+                        .requestMatchers(HttpMethod.POST, "/api/v1/licenses/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/licenses/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/licenses/**").hasAnyRole("ADMIN", "OPERATOR")
 
                         // Firewall management: ADMIN only (OS-level iptables)
                         .requestMatchers("/api/v1/firewall/**").hasRole("ADMIN")

@@ -1,6 +1,7 @@
 package com.opticoms.optinmscore.domain.inventory.model;
 
 import com.opticoms.optinmscore.common.model.BaseEntity;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
@@ -34,6 +35,9 @@ public class GNodeB extends BaseEntity {
     private int connectedUeCount;
 
     private Long lastSeenAt;
+
+    @Schema(description = "Optional reference to an EdgeLocation document ID")
+    private String edgeLocationId;
 
     public enum ConnectionStatus {
         CONNECTED, DISCONNECTED

@@ -29,6 +29,18 @@ class YamlRendererTest {
         global.setMaxSupportedDevices(1024);
         global.setMaxSupportedGNBs(64);
 
+        GlobalConfig.UeIpPool pool1 = new GlobalConfig.UeIpPool();
+        pool1.setTunInterface("ogstun");
+        pool1.setIpRange("10.45.0.0/16");
+        pool1.setGatewayIp("10.45.0.1");
+
+        GlobalConfig.UeIpPool pool2 = new GlobalConfig.UeIpPool();
+        pool2.setTunInterface("ogstun2");
+        pool2.setIpRange("10.46.0.0/16");
+        pool2.setGatewayIp("10.46.0.1");
+
+        global.setUeIpPoolList(new ArrayList<>(List.of(pool1, pool2)));
+
         amf = new AmfConfig();
         amf.setAmfName("open5gs-amf0");
 
@@ -65,8 +77,7 @@ class YamlRendererTest {
 
         SmfConfig.ApnDnn dnn1 = new SmfConfig.ApnDnn();
         dnn1.setApnDnnName("internet");
-        dnn1.setUeIpRange("10.45.0.0/16");
-        dnn1.setGatewayIp("10.45.0.1");
+        dnn1.setTunInterface("ogstun");
         dnn1.setLocal(true);
 
         SmfConfig.SliceId sliceId = new SmfConfig.SliceId();
@@ -84,8 +95,7 @@ class YamlRendererTest {
 
         SmfConfig.ApnDnn dnn2 = new SmfConfig.ApnDnn();
         dnn2.setApnDnnName("ims");
-        dnn2.setUeIpRange("10.46.0.0/16");
-        dnn2.setGatewayIp("10.46.0.1");
+        dnn2.setTunInterface("ogstun2");
         dnn2.setLocal(true);
         dnn2.setSliceId(sliceId);
         dnn2.setTai(smfTai);
@@ -139,7 +149,9 @@ class YamlRendererTest {
                 () -> assertTrue(yaml.contains("ue: 1024"), "global.max.ue"),
                 () -> assertTrue(yaml.contains("gnb: 64"), "global.max.gnb"),
                 () -> assertTrue(yaml.contains("8.8.8.8"), "dns1"),
-                () -> assertTrue(yaml.contains("8.8.4.4"), "dns2")
+                () -> assertTrue(yaml.contains("8.8.4.4"), "dns2"),
+                () -> assertTrue(yaml.contains("10.45.0.1/16"), "subnet from pool1 gateway+prefix"),
+                () -> assertTrue(yaml.contains("10.46.0.1/16"), "subnet from pool2 gateway+prefix")
         );
 
         System.out.println("=== smfcfg.yaml ===");
@@ -168,7 +180,7 @@ class YamlRendererTest {
     @Test
     void wrapperSh_correctOrder() {
         UpfYamlRenderer renderer = new UpfYamlRenderer();
-        String sh = renderer.renderWrapperScript(smf);
+        String sh = renderer.renderWrapperScript(smf, global);
 
         int sysctlPos = sh.indexOf("sysctl -w net.ipv4.conf.all.rp_filter=0");
         int linkUpPos = sh.indexOf("ip link set ogstun up");

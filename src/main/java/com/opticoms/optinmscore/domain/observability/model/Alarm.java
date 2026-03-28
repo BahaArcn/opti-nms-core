@@ -6,12 +6,19 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
 @Document(collection = "alarms")
+@CompoundIndexes({
+        @CompoundIndex(name = "tenant_status_time_idx", def = "{'tenantId': 1, 'status': 1, 'eventTime': -1}"),
+        @CompoundIndex(name = "tenant_sev_status_idx", def = "{'tenantId': 1, 'severity': 1, 'status': 1}"),
+        @CompoundIndex(name = "tenant_src_type_status_idx", def = "{'tenantId': 1, 'source': 1, 'alarmType': 1, 'status': 1}")
+})
 @Schema(description = "Network alarm representing a fault or warning condition")
 public class Alarm extends BaseEntity {
 
@@ -47,11 +54,17 @@ public class Alarm extends BaseEntity {
     @Schema(description = "User who cleared the alarm", accessMode = Schema.AccessMode.READ_ONLY)
     private String clearedBy;
 
+    @Schema(description = "Time when alarm was acknowledged (epoch milliseconds)", accessMode = Schema.AccessMode.READ_ONLY)
+    private Long acknowledgedTime;
+
+    @Schema(description = "User who acknowledged the alarm", accessMode = Schema.AccessMode.READ_ONLY)
+    private String acknowledgedBy;
+
     public enum Severity {
         CRITICAL, MAJOR, MINOR, WARNING
     }
 
     public enum AlarmStatus {
-        ACTIVE, CLEARED
+        ACTIVE, ACKNOWLEDGED, CLEARED
     }
 }

@@ -86,6 +86,18 @@ public class SubscriberController {
         return ResponseEntity.ok(subscriberService.getAllSubscribersPaged(tenantId, pageable));
     }
 
+    @Operation(summary = "Search subscribers by label (text), IMSI (15 digits exact), or MSISDN (10-15 digits exact)")
+    @GetMapping("/search")
+    public ResponseEntity<Page<Subscriber>> searchSubscribers(
+            HttpServletRequest request,
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        String tenantId = TenantContext.getCurrentTenantId(request);
+        Pageable pageable = PageRequest.of(page, size);
+        return ResponseEntity.ok(subscriberService.searchSubscribers(tenantId, q, pageable));
+    }
+
     @Operation(summary = "Get total subscriber count")
     @GetMapping("/count")
     public ResponseEntity<Long> getSubscriberCount(

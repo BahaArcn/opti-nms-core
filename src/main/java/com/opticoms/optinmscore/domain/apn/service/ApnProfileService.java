@@ -4,6 +4,7 @@ import com.opticoms.optinmscore.domain.audit.aspect.Audited;
 import com.opticoms.optinmscore.domain.audit.model.AuditLog.AuditAction;
 import com.opticoms.optinmscore.domain.apn.model.ApnProfile;
 import com.opticoms.optinmscore.domain.apn.repository.ApnProfileRepository;
+import com.opticoms.optinmscore.domain.license.service.LicenseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -20,9 +21,11 @@ import java.util.List;
 public class ApnProfileService {
 
     private final ApnProfileRepository repository;
+    private final LicenseService licenseService;
 
     @Audited(action = AuditAction.CREATE, entityType = "ApnProfile")
     public ApnProfile create(String tenantId, ApnProfile profile) {
+        licenseService.checkCanAddDnn(tenantId);
         validateSlice(profile);
         checkDuplicate(tenantId, profile.getDnn(), profile.getSst(), null);
 

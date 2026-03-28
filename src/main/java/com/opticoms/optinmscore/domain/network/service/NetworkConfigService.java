@@ -9,7 +9,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Optional;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -25,7 +27,8 @@ public class NetworkConfigService {
     @Audited(action = AuditAction.UPDATE, entityType = "GlobalConfig")
     public GlobalConfig saveOrUpdateGlobalConfig(String tenantId, GlobalConfig newConfig) {
 
-        // 1. Veritabanında bu müşteriye (tenant) ait önceden kaydedilmiş bir ayar var mı? Kutuyu (Optional) getir.
+        validateUeIpPoolList(newConfig.getUeIpPoolList());
+
         Optional<GlobalConfig> existingConfigOpt = globalConfigRepository.findByTenantId(tenantId);
 
         if (existingConfigOpt.isPresent()) {
@@ -38,10 +41,7 @@ public class NetworkConfigService {
             newConfig.setMaxSupportedGNBs(existingConfig.getMaxSupportedGNBs());
         }
 
-        // Tenant ID'sini güvenlik için biz kodla basıyoruz (Kullanıcı dışarıdan hackleyip başka tenant'a veri yazamasın diye)
         newConfig.setTenantId(tenantId);
-
-        // 2. Repository'ye "Al bunu kaydet (veya güncelle)" diyoruz.
         return globalConfigRepository.save(newConfig);
     }
 
@@ -49,10 +49,60 @@ public class NetworkConfigService {
      * İş Kuralı 2: Müşterinin ayarını getir. Yoksa hata fırlat.
      */
     public GlobalConfig getGlobalConfig(String tenantId) {
-
-        // Kutuyu aç. Eğer kutu boşsa (ayar yoksa) direkt kodun çalışmasını durdur ve Hata fırlat!
         return globalConfigRepository.findByTenantId(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Global Configuration not found for tenant: " + tenantId));
+    }
+
+    private void validateUeIpPoolList(List<GlobalConfig.UeIpPool> pools) {
+        if (pools == null || pools.isEmpty()) {
+            return;
+        }
+
+        Set<String> seenTunInterfaces = new HashSet<>();
+        for (GlobalConfig.UeIpPool pool : pools) {
+            if (!seenTunInterfaces.add(pool.getTunInterface())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Duplicate tunInterface: '" + pool.getTunInterface() + "'");
+            }
+        }
+
+        for (int i = 0; i < pools.size(); i++) {
+            for (int j = i + 1; j < pools.size(); j++) {
+                if (cidrOverlaps(pools.get(i).getIpRange(), pools.get(j).getIpRange())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "IP range overlap between '" + pools.get(i).getIpRange()
+                                    + "' (" + pools.get(i).getTunInterface()
+                                    + ") and '" + pools.get(j).getIpRange()
+                                    + "' (" + pools.get(j).getTunInterface() + ")");
+                }
+            }
+        }
+    }
+
+    static boolean cidrOverlaps(String rangeA, String rangeB) {
+        if (!rangeA.contains("/") || !rangeB.contains("/")) {
+            return false;
+        }
+        try {
+            long[] netA = parseCidr(rangeA);
+            long[] netB = parseCidr(rangeB);
+            long commonMask = netA[1] & netB[1];
+            return (netA[0] & commonMask) == (netB[0] & commonMask);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static long[] parseCidr(String cidr) throws UnknownHostException {
+        String[] parts = cidr.split("/");
+        byte[] addr = InetAddress.getByName(parts[0]).getAddress();
+        long ip = ((long) (addr[0] & 0xFF) << 24)
+                | ((long) (addr[1] & 0xFF) << 16)
+                | ((long) (addr[2] & 0xFF) << 8)
+                | (addr[3] & 0xFF);
+        int prefix = Integer.parseInt(parts[1]);
+        long mask = prefix == 0 ? 0L : 0xFFFFFFFFL << (32 - prefix);
+        return new long[]{ip & mask, mask};
     }
 }

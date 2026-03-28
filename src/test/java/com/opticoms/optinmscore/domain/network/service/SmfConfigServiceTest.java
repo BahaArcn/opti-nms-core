@@ -1,12 +1,15 @@
 package com.opticoms.optinmscore.domain.network.service;
 
+import com.opticoms.optinmscore.domain.network.model.GlobalConfig;
 import com.opticoms.optinmscore.domain.network.model.SmfConfig;
+import com.opticoms.optinmscore.domain.network.repository.GlobalConfigRepository;
 import com.opticoms.optinmscore.domain.network.repository.SmfConfigRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,12 +24,14 @@ class SmfConfigServiceTest {
     private static final String TENANT = "OPTC-0001/0001/01";
 
     @Mock private SmfConfigRepository smfConfigRepository;
+    @Mock private GlobalConfigRepository globalConfigRepository;
 
     @InjectMocks
     private SmfConfigService service;
 
     @Test
     void saveOrUpdateSmfConfig_newConfig_setsTenantAndSaves() {
+        when(globalConfigRepository.findByTenantId(TENANT)).thenReturn(Optional.of(buildGlobalConfig()));
         when(smfConfigRepository.findByTenantId(TENANT)).thenReturn(Optional.empty());
         when(smfConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -46,6 +51,7 @@ class SmfConfigServiceTest {
         existing.setCreatedAt(createdAt);
         existing.setCreatedBy("admin");
 
+        when(globalConfigRepository.findByTenantId(TENANT)).thenReturn(Optional.of(buildGlobalConfig()));
         when(smfConfigRepository.findByTenantId(TENANT)).thenReturn(Optional.of(existing));
         when(smfConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -58,6 +64,19 @@ class SmfConfigServiceTest {
         assertEquals(createdAt, result.getCreatedAt());
         assertEquals("admin", result.getCreatedBy());
         assertEquals(1500, result.getMtu());
+    }
+
+    @Test
+    void saveOrUpdateSmfConfig_invalidTunInterface_throws400() {
+        GlobalConfig global = buildGlobalConfig();
+        when(globalConfigRepository.findByTenantId(TENANT)).thenReturn(Optional.of(global));
+
+        SmfConfig config = buildSmfConfig();
+        config.getApnList().get(0).setTunInterface("nonexistent");
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> service.saveOrUpdateSmfConfig(TENANT, config));
+        assertTrue(ex.getReason().contains("nonexistent"));
     }
 
     @Test
@@ -91,10 +110,24 @@ class SmfConfigServiceTest {
 
         SmfConfig.ApnDnn apn = new SmfConfig.ApnDnn();
         apn.setApnDnnName("internet");
-        apn.setUeIpRange("10.45.0.0/16");
-        apn.setGatewayIp("10.45.0.1");
+        apn.setTunInterface("ogstun");
         c.setApnList(List.of(apn));
 
         return c;
+    }
+
+    private GlobalConfig buildGlobalConfig() {
+        GlobalConfig g = new GlobalConfig();
+        g.setNetworkFullName("Test");
+        g.setNetworkShortName("TST");
+        g.setNetworkMode(GlobalConfig.NetworkMode.ONLY_5G);
+
+        GlobalConfig.UeIpPool pool = new GlobalConfig.UeIpPool();
+        pool.setTunInterface("ogstun");
+        pool.setIpRange("10.45.0.0/16");
+        pool.setGatewayIp("10.45.0.1");
+        g.setUeIpPoolList(List.of(pool));
+
+        return g;
     }
 }

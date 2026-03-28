@@ -24,7 +24,7 @@ import java.util.Map;
  *  SmfConfig.securityIndication.integrity   → smf.security_indication.integrity_protection_indication
  *  SmfConfig.securityIndication.ciphering   → smf.security_indication.confidentiality_protection_indication
  *
- *  SmfConfig.apnList[*].ueIpRange           → smf.session[*].subnet
+ *  GlobalConfig.ueIpPoolList[*].ipRange      → smf.session[*].subnet (via tunInterface lookup)
  *  SmfConfig.apnList[*].apnDnnName          → smf.session[*].dnn  (opsiyonel)
  *  SmfConfig.apnList[*].local=false         → smf.pfcp.client.upf[*].address = remoteUpfIp + dnn
  *  SmfConfig.apnList[*].local=true          → smf.pfcp.client.upf[*].address = UpfConfig.n4PfcpIp + dnn
@@ -85,9 +85,8 @@ public class SmfYamlRenderer {
         // metrics: Prometheus
         smfSection.put("metrics", buildMetricsSection());
 
-        // session: UE IP havuzları
-        // LLD Tablo 5: Dnn-List.UE-IP-range → smf.yaml
-        smfSection.put("session", buildSessionList(smf));
+        // session: UE IP havuzları (from GlobalConfig.ueIpPoolList via tunInterface lookup)
+        smfSection.put("session", buildSessionList(smf, global));
 
         // dns: UE'ye advertise edilen DNS sunucuları
         // LLD Tablo 4: Dns → smf.yaml
@@ -208,26 +207,29 @@ public class SmfYamlRenderer {
         return metrics;
     }
 
-    private List<Map<String, Object>> buildSessionList(SmfConfig smf) {
-        // smf.session[*].subnet = apnList[*].ueIpRange
-        // CIDR formatı direkt kullanılır (10.45.0.0/16)
+    private List<Map<String, Object>> buildSessionList(SmfConfig smf, GlobalConfig global) {
         List<Map<String, Object>> sessions = new ArrayList<>();
         for (SmfConfig.ApnDnn dnn : smf.getApnList()) {
+            GlobalConfig.UeIpPool pool = findPool(global, dnn.getTunInterface());
             Map<String, Object> session = new LinkedHashMap<>();
-            // SMF config'de subnet = UE IP range (CIDR)
-            // Ancak Open5GS smf.session.subnet format: gateway/prefix (10.45.0.1/16)
-            // ueIpRange = 10.45.0.0/16 → gateway = gatewayIp, prefix = /16
             session.put("subnet", buildSubnetFromGatewayAndRange(
-                    dnn.getGatewayIp(), dnn.getUeIpRange()));
+                    pool.getGatewayIp(), pool.getIpRange()));
             sessions.add(session);
         }
         return sessions;
     }
 
-    /**
-     * SMF session subnet = gateway_ip/prefix_length
-     * Örnek: gatewayIp=10.45.0.1, ueIpRange=10.45.0.0/16 → "10.45.0.1/16"
-     */
+    private GlobalConfig.UeIpPool findPool(GlobalConfig global, String tunInterface) {
+        if (global.getUeIpPoolList() != null) {
+            for (GlobalConfig.UeIpPool pool : global.getUeIpPoolList()) {
+                if (pool.getTunInterface().equals(tunInterface)) {
+                    return pool;
+                }
+            }
+        }
+        throw new IllegalStateException("UeIpPool not found for tunInterface: " + tunInterface);
+    }
+
     private String buildSubnetFromGatewayAndRange(String gatewayIp, String ueIpRange) {
         if (ueIpRange.contains("/")) {
             String prefix = ueIpRange.substring(ueIpRange.indexOf("/"));

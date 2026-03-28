@@ -43,7 +43,7 @@ public class AuditLog {
 
     public enum AuditAction {
         CREATE, UPDATE, DELETE, REVOKE, DEPRECATE, READ_SENSITIVE, APPLY, REMOVE,
-        CHANGE_PASSWORD, RESET_PASSWORD, STATUS_CHANGE, CLEAR
+        CHANGE_PASSWORD, RESET_PASSWORD, STATUS_CHANGE, CLEAR, ACKNOWLEDGE
     }
 
     public enum AuditOutcome {

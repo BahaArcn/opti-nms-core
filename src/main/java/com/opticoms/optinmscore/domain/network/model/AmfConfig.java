@@ -1,6 +1,7 @@
 package com.opticoms.optinmscore.domain.network.model;
 
 import com.opticoms.optinmscore.common.model.BaseEntity;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.Data;
@@ -94,6 +95,10 @@ public class AmfConfig extends BaseEntity {
 
         @Min(1) @Max(65533)
         private int tac;
+
+        @Min(0) @Max(65533)
+        @Schema(description = "TAC range end (if > tac, defines a range; otherwise single TAC)")
+        private int tacEnd;
     }
 
     @Data

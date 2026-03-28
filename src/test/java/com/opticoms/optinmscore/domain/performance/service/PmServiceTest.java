@@ -1,5 +1,6 @@
 package com.opticoms.optinmscore.domain.performance.service;
 
+import com.opticoms.optinmscore.domain.inventory.repository.ConnectedUeRepository;
 import com.opticoms.optinmscore.domain.performance.model.PmMetric;
 import com.opticoms.optinmscore.domain.performance.repository.PmMetricRepository;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,7 @@ class PmServiceTest {
     private static final String TENANT = "OPTC-0001/0001/01";
 
     @Mock private PmMetricRepository pmMetricRepository;
+    @Mock private ConnectedUeRepository connectedUeRepository;
 
     @InjectMocks
     private PmService service;

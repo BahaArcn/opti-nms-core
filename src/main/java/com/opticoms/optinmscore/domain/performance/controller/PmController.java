@@ -48,4 +48,31 @@ public class PmController {
         String tenantId = TenantContext.getCurrentTenantId(request);
         return ResponseEntity.ok(pmService.getCurrentValue(tenantId, metric));
     }
+
+    @Operation(summary = "Get total data transferred in GB over a time window")
+    @GetMapping("/total-data")
+    public ResponseEntity<Double> getTotalDataGB(
+            HttpServletRequest request,
+            @RequestParam(defaultValue = "60") int minutes) {
+        String tenantId = TenantContext.getCurrentTenantId(request);
+        return ResponseEntity.ok(pmService.getTotalDataGB(tenantId, minutes));
+    }
+
+    @Operation(summary = "Get current uplink/downlink throughput in bps")
+    @GetMapping("/throughput")
+    public ResponseEntity<PmService.ThroughputResult> getCurrentThroughput(
+            HttpServletRequest request) {
+        String tenantId = TenantContext.getCurrentTenantId(request);
+        return ResponseEntity.ok(pmService.getCurrentThroughput(tenantId));
+    }
+
+    @Operation(summary = "Get estimated traffic for a specific gNB")
+    @GetMapping("/gnb-traffic")
+    public ResponseEntity<PmService.GnbTrafficResult> getGnbTraffic(
+            HttpServletRequest request,
+            @RequestParam String gnbId,
+            @RequestParam(defaultValue = "60") int minutes) {
+        String tenantId = TenantContext.getCurrentTenantId(request);
+        return ResponseEntity.ok(pmService.getGnbTraffic(tenantId, gnbId, minutes));
+    }
 }

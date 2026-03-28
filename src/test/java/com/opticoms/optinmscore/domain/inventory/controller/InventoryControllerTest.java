@@ -2,6 +2,7 @@ package com.opticoms.optinmscore.domain.inventory.controller;
 
 import com.opticoms.optinmscore.domain.inventory.model.GNodeB;
 import com.opticoms.optinmscore.domain.inventory.service.InventoryService;
+import com.opticoms.optinmscore.domain.inventory.service.NodeResourceService;
 import com.opticoms.optinmscore.security.JwtService;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,7 @@ class InventoryControllerTest {
     @Autowired private MockMvc mockMvc;
 
     @MockBean private InventoryService inventoryService;
+    @MockBean private NodeResourceService nodeResourceService;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
 

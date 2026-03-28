@@ -8,6 +8,8 @@ import com.opticoms.optinmscore.domain.inventory.repository.GNodeBRepository;
 import com.opticoms.optinmscore.domain.inventory.repository.PduSessionRepository;
 import com.opticoms.optinmscore.domain.observability.model.Alarm;
 import com.opticoms.optinmscore.domain.observability.service.AlarmService;
+import com.opticoms.optinmscore.domain.performance.model.PmMetric;
+import com.opticoms.optinmscore.domain.performance.service.PmService;
 import com.opticoms.optinmscore.domain.tenant.model.Tenant;
 import com.opticoms.optinmscore.domain.tenant.repository.TenantRepository;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +47,7 @@ public class Open5gsSyncScheduler {
     private final PduSessionRepository pduSessionRepository;
     private final AlarmService alarmService;
     private final TenantRepository tenantRepository;
+    private final PmService pmService;
 
     @Scheduled(fixedRateString = "${open5gs.sync.interval-ms:30000}")
     @SchedulerLock(name = "open5gs_sync", lockAtMostFor = "28s", lockAtLeastFor = "10s")
@@ -60,6 +63,7 @@ public class Open5gsSyncScheduler {
                 syncGnbInfo(tenant.getTenantId(), tenant.getAmfUrl());
                 syncUeInfo(tenant.getTenantId(), tenant.getAmfUrl());
                 syncPduInfo(tenant.getTenantId(), tenant.getSmfUrl());
+                recordConnectedUeCount(tenant.getTenantId());
                 log.debug("Sync completed for tenant {}", tenant.getTenantId());
             } catch (Exception e) {
                 log.error("Sync failed for tenant {}", tenant.getTenantId(), e);
@@ -314,6 +318,16 @@ public class Open5gsSyncScheduler {
                 log.info("Marked PDU session {} as RELEASED for tenant {}", session.getSessionId(), tenantId);
             }
         }
+    }
+
+    private void recordConnectedUeCount(String tenantId) {
+        long count = connectedUeRepository.countByTenantIdAndStatus(tenantId, ConnectedUe.UeStatus.CONNECTED);
+        PmMetric metric = new PmMetric();
+        metric.setMetricName("connected_ue_count");
+        metric.setValue((double) count);
+        metric.setTimestamp(System.currentTimeMillis());
+        metric.setMetricType(PmMetric.MetricType.GAUGE);
+        pmService.ingestMetric(tenantId, metric);
     }
 
     private void raiseConnectivityAlarm(String tenantId, String errorMessage) {

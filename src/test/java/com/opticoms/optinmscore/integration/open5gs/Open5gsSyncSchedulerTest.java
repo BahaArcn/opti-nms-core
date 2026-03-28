@@ -7,6 +7,7 @@ import com.opticoms.optinmscore.domain.inventory.repository.ConnectedUeRepositor
 import com.opticoms.optinmscore.domain.inventory.repository.GNodeBRepository;
 import com.opticoms.optinmscore.domain.inventory.repository.PduSessionRepository;
 import com.opticoms.optinmscore.domain.observability.service.AlarmService;
+import com.opticoms.optinmscore.domain.performance.service.PmService;
 import com.opticoms.optinmscore.domain.tenant.model.Tenant;
 import com.opticoms.optinmscore.domain.tenant.repository.TenantRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +37,7 @@ class Open5gsSyncSchedulerTest {
     @Mock private PduSessionRepository pduSessionRepository;
     @Mock private AlarmService alarmService;
     @Mock private TenantRepository tenantRepository;
+    @Mock private PmService pmService;
 
     @InjectMocks
     private Open5gsSyncScheduler scheduler;

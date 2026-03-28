@@ -33,6 +33,15 @@ public class AmfConfigService {
         // Güvenlik: Tenant ID'yi dışarıdan gelen nesneye kodla basıyoruz.
         newConfig.setTenantId(tenantId);
 
+        if (newConfig.getSupportedTais() != null) {
+            for (AmfConfig.Tai tai : newConfig.getSupportedTais()) {
+                if (tai.getTacEnd() != 0 && tai.getTacEnd() < tai.getTac()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "TAI range invalid: tacEnd (" + tai.getTacEnd() + ") must be >= tac (" + tai.getTac() + ")");
+                }
+            }
+        }
+
         return amfConfigRepository.save(newConfig);
     }
 

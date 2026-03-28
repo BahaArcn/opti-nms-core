@@ -1,5 +1,8 @@
 package com.opticoms.optinmscore.domain.subscriber.service;
 
+import com.opticoms.optinmscore.domain.inventory.repository.ConnectedUeRepository;
+import com.opticoms.optinmscore.domain.license.service.LicenseService;
+import com.opticoms.optinmscore.domain.policy.service.PolicyService;
 import com.opticoms.optinmscore.domain.subscriber.model.Subscriber;
 import com.opticoms.optinmscore.domain.subscriber.repository.SubscriberRepository;
 import com.opticoms.optinmscore.domain.tenant.model.Tenant;
@@ -36,6 +39,9 @@ class SubscriberServiceTest {
     @Mock private EncryptionService encryptionService;
     @Mock private Open5gsProvisioningService open5gsProvisioning;
     @Mock private TenantRepository tenantRepository;
+    @Mock private ConnectedUeRepository connectedUeRepository;
+    @Mock private PolicyService policyService;
+    @Mock private LicenseService licenseService;
 
     @InjectMocks
     private SubscriberService service;

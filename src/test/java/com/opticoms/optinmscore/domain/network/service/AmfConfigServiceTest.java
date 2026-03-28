@@ -12,6 +12,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.web.server.ResponseStatusException;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -86,6 +88,83 @@ class AmfConfigServiceTest {
         assertEquals(5L, saved.getVersion());
         assertEquals(2000L, saved.getCreatedAt());
         assertEquals("admin", saved.getCreatedBy());
+    }
+
+    @Test
+    void saveOrUpdate_tacEndLessThanTac_throws() {
+        AmfConfig.Plmn plmn = new AmfConfig.Plmn();
+        plmn.setMcc("999");
+        plmn.setMnc("70");
+
+        AmfConfig.Tai tai = new AmfConfig.Tai();
+        tai.setPlmn(plmn);
+        tai.setTac(100);
+        tai.setTacEnd(50);
+        config.setSupportedTais(List.of(tai));
+
+        when(repo.findByTenantId(TENANT)).thenReturn(Optional.empty());
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> service.saveOrUpdateAmfConfig(TENANT, config));
+
+        assertEquals(400, ex.getStatusCode().value());
+        assertTrue(ex.getReason().contains("tacEnd (50) must be >= tac (100)"));
+        verify(repo, never()).save(any());
+    }
+
+    @Test
+    void saveOrUpdate_tacEndZero_noValidationError() {
+        AmfConfig.Plmn plmn = new AmfConfig.Plmn();
+        plmn.setMcc("999");
+        plmn.setMnc("70");
+
+        AmfConfig.Tai tai = new AmfConfig.Tai();
+        tai.setPlmn(plmn);
+        tai.setTac(100);
+        tai.setTacEnd(0);
+        config.setSupportedTais(List.of(tai));
+
+        when(repo.findByTenantId(TENANT)).thenReturn(Optional.empty());
+        when(repo.save(any(AmfConfig.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AmfConfig saved = service.saveOrUpdateAmfConfig(TENANT, config);
+
+        assertNotNull(saved);
+        verify(repo).save(config);
+    }
+
+    @Test
+    void saveOrUpdate_tacEndEqualsTac_noValidationError() {
+        AmfConfig.Plmn plmn = new AmfConfig.Plmn();
+        plmn.setMcc("999");
+        plmn.setMnc("70");
+
+        AmfConfig.Tai tai = new AmfConfig.Tai();
+        tai.setPlmn(plmn);
+        tai.setTac(100);
+        tai.setTacEnd(100);
+        config.setSupportedTais(List.of(tai));
+
+        when(repo.findByTenantId(TENANT)).thenReturn(Optional.empty());
+        when(repo.save(any(AmfConfig.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AmfConfig saved = service.saveOrUpdateAmfConfig(TENANT, config);
+
+        assertNotNull(saved);
+        verify(repo).save(config);
+    }
+
+    @Test
+    void saveOrUpdate_nullSupportedTais_noValidationError() {
+        config.setSupportedTais(null);
+
+        when(repo.findByTenantId(TENANT)).thenReturn(Optional.empty());
+        when(repo.save(any(AmfConfig.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AmfConfig saved = service.saveOrUpdateAmfConfig(TENANT, config);
+
+        assertNotNull(saved);
+        verify(repo).save(config);
     }
 
     @Test

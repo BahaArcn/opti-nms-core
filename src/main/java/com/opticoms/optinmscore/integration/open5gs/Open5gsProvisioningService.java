@@ -129,6 +129,9 @@ public class Open5gsProvisioningService {
             security.append("op", subscriber.getOp());
             security.append("opc", null);
         }
+        if (subscriber.getSqn() != null && !subscriber.getSqn().isBlank()) {
+            security.append("sqn", Long.parseLong(subscriber.getSqn(), 16));
+        }
         doc.append("security", security);
 
         doc.append("schema_version", SCHEMA_VERSION);

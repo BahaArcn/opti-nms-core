@@ -1,6 +1,7 @@
 package com.opticoms.optinmscore.domain.apn.model;
 
 import com.opticoms.optinmscore.common.model.BaseEntity;
+import com.opticoms.optinmscore.common.model.IpFilterRule;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -12,6 +13,8 @@ import lombok.EqualsAndHashCode;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.mapping.Document;
+
+import java.util.List;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -56,6 +59,16 @@ public class ApnProfile extends BaseEntity {
 
     @Schema(description = "Human-readable description", example = "Default internet APN for eMBB slice")
     private String description;
+
+    @Schema(description = "Named bandwidth policy label", example = "High")
+    private String bandwidthPolicyName;
+
+    @Schema(description = "Enable IP filtering for this DNN")
+    private boolean ipFilteringEnabled = false;
+
+    @Valid
+    @Schema(description = "IP filter rules (evaluated in order)")
+    private List<IpFilterRule> ipFilterRules;
 
     public enum PduSessionType {
         @Schema(description = "IPv4 only") IPV4,

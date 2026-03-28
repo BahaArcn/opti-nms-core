@@ -1,6 +1,8 @@
 package com.opticoms.optinmscore.domain.dashboard.service;
 
+import com.opticoms.optinmscore.domain.edgelocation.repository.EdgeLocationRepository;
 import com.opticoms.optinmscore.domain.inventory.model.ConnectedUe;
+import com.opticoms.optinmscore.domain.license.service.LicenseService;
 import com.opticoms.optinmscore.domain.inventory.model.GNodeB;
 import com.opticoms.optinmscore.domain.inventory.model.PduSession;
 import com.opticoms.optinmscore.domain.inventory.repository.ConnectedUeRepository;
@@ -30,6 +32,8 @@ public class DashboardService {
     private final AlarmRepository alarmRepository;
     private final Open5gsClient open5gsClient;
     private final TenantRepository tenantRepository;
+    private final EdgeLocationRepository edgeLocationRepository;
+    private final LicenseService licenseService;
 
     public DashboardSummary getDashboardSummary(String tenantId) {
         Tenant tenant = tenantRepository.findByTenantId(tenantId)
@@ -38,6 +42,8 @@ public class DashboardService {
 
         boolean amfReachable = open5gsClient.isAmfHealthy(tenant.getAmfUrl());
         boolean smfReachable = open5gsClient.isSmfHealthy(tenant.getSmfUrl());
+        boolean upfReachable = tenant.getUpfMetricsUrl() != null
+                && open5gsClient.isUpfHealthy(tenant.getUpfMetricsUrl());
 
         long criticalAlarms = alarmRepository.countByTenantIdAndSeverityAndStatus(
                 tenantId, Alarm.Severity.CRITICAL, Alarm.AlarmStatus.ACTIVE);
@@ -54,12 +60,24 @@ public class DashboardService {
                 .totalUes(connectedUeRepository.countByTenantId(tenantId))
                 .activeSessions(pduSessionRepository.countByTenantIdAndStatus(tenantId, PduSession.SessionStatus.ACTIVE))
                 .activeAlarms(alarmRepository.countByTenantIdAndStatus(tenantId, Alarm.AlarmStatus.ACTIVE))
+                .totalEdgeLocations(edgeLocationRepository.countByTenantId(tenantId))
                 .criticalAlarms(criticalAlarms)
                 .majorAlarms(majorAlarms)
                 .systemStatus(determineSystemStatus(amfReachable, smfReachable, criticalAlarms, majorAlarms))
                 .amfReachable(amfReachable)
                 .smfReachable(smfReachable)
+                .upfReachable(upfReachable)
+                .licenseActive(isLicenseActive(tenantId))
                 .build();
+    }
+
+    private boolean isLicenseActive(String tenantId) {
+        try {
+            LicenseService.LicenseStatus status = licenseService.getLicenseStatus(tenantId);
+            return status.isActive();
+        } catch (Exception e) {
+            return true; // no license = unrestricted
+        }
     }
 
     private SystemStatus determineSystemStatus(boolean amfHealthy, boolean smfHealthy,
@@ -84,11 +102,14 @@ public class DashboardService {
         private long totalUes;
         private long activeSessions;
         private long activeAlarms;
+        private long totalEdgeLocations;
         private long criticalAlarms;
         private long majorAlarms;
         private SystemStatus systemStatus;
         private boolean amfReachable;
         private boolean smfReachable;
+        private boolean upfReachable;
+        private boolean licenseActive;
     }
 
     public enum SystemStatus {

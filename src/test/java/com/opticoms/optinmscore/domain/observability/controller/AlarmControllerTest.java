@@ -114,6 +114,21 @@ class AlarmControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "OPERATOR")
+    void acknowledgeAlarm_returns200() throws Exception {
+        Alarm alarm = new Alarm();
+        alarm.setSource("gNodeB-001");
+        alarm.setStatus(Alarm.AlarmStatus.ACKNOWLEDGED);
+
+        when(alarmService.acknowledgeAlarm(eq(TENANT), eq("alarm-1"))).thenReturn(alarm);
+
+        mockMvc.perform(put("/api/v1/fault/alarms/alarm-1/acknowledge")
+                        .requestAttr("tenantId", TENANT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACKNOWLEDGED"));
+    }
+
+    @Test
     @WithMockUser(roles = "ADMIN")
     void getAlarmById_returns200() throws Exception {
         Alarm alarm = new Alarm();

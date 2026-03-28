@@ -21,4 +21,8 @@ public interface SubscriberRepository extends MongoRepository<Subscriber, String
     Page<Subscriber> findByTenantId(String tenantId, Pageable pageable);
 
     long countByTenantId(String tenantId);
+
+    Page<Subscriber> findByTenantIdAndLabelContainingIgnoreCase(String tenantId, String label, Pageable pageable);
+
+    Optional<Subscriber> findByMsisdnHashAndTenantId(String msisdnHash, String tenantId);
 }

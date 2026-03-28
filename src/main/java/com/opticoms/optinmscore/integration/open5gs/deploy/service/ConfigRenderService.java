@@ -65,7 +65,7 @@ public class ConfigRenderService {
                 .amfYaml(amfRenderer.render(global, amf))
                 .smfYaml(smfRenderer.render(smf, global, upf))
                 .upfYaml(upfRenderer.renderYaml(upf, smf, global))
-                .wrapperSh(upfRenderer.renderWrapperScript(smf))
+                .wrapperSh(upfRenderer.renderWrapperScript(smf, global))
                 .nrfYaml(nrfRenderer.render(amf, global))
                 .nssfYaml(nssfRenderer.render(amf, global))
                 .commonNfYamls(commonNfRenderer.renderAll(global, tenantId));
@@ -115,7 +115,7 @@ public class ConfigRenderService {
 
         return RenderedConfigs.builder()
                 .upfYaml(upfRenderer.renderYaml(upf, smf, global))
-                .wrapperSh(upfRenderer.renderWrapperScript(smf))
+                .wrapperSh(upfRenderer.renderWrapperScript(smf, global))
                 .build();
     }
 }

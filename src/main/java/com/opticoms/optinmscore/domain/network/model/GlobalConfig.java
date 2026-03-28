@@ -2,13 +2,13 @@ package com.opticoms.optinmscore.domain.network.model;
 
 import com.opticoms.optinmscore.common.model.BaseEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.springframework.data.mongodb.core.mapping.Document;
+
+import java.util.List;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -42,9 +42,64 @@ public class GlobalConfig extends BaseEntity {
     @Schema(description = "Master instance address (IPv4/IPv6/domain) when workAsMaster=false")
     private String masterAddr;
 
+    @Valid
+    @Schema(description = "Centralized UE IP pool list. Each DNN references a pool by tunInterface name.")
+    private List<UeIpPool> ueIpPoolList;
+
+    // --- Default Traffic QoS ---
+    @Min(1) @Max(86)
+    @Schema(description = "Default 5QI value for new sessions", example = "9")
+    private Integer defaultFiveQi = 9;
+
+    @Min(1) @Max(15)
+    @Schema(description = "Default ARP priority level", example = "8")
+    private Integer defaultArpPriority = 8;
+
+    @Min(0)
+    @Schema(description = "Default UE AMBR uplink in kbps", example = "1000000")
+    private Long defaultAmbrUlKbps = 1000000L;
+
+    @Min(0)
+    @Schema(description = "Default UE AMBR downlink in kbps", example = "3000000")
+    private Long defaultAmbrDlKbps = 3000000L;
+
+    // --- UDM ---
+    @Min(0) @Max(65535)
+    @Schema(description = "UDM Authentication Management Field (AMF value)", example = "2000")
+    private Integer udmAmf = 2000;
+
+    @NotNull
+    @Schema(description = "UDM authentication method")
+    private AuthMethod authMethod = AuthMethod.FIVE_G_AKA;
+
+    // --- Signaling ---
+    @Schema(description = "Global toggle: encrypt NAS signaling messages for all clients")
+    private boolean encryptClientSignaling = false;
+
+    @Data
+    public static class UeIpPool {
+        @NotBlank
+        @Pattern(regexp = "^([0-9]{1,3}\\.){3}[0-9]{1,3}(/[0-9]{1,2}|-([0-9]{1,3}\\.){3}[0-9]{1,3})$",
+                message = "Must be CIDR (e.g. 10.45.0.0/16) or range format")
+        private String ipRange;
+
+        @NotBlank
+        @Schema(description = "TUN interface name, e.g. ogstun, ogstun2", example = "ogstun")
+        private String tunInterface;
+
+        @NotBlank
+        @Pattern(regexp = "^([0-9]{1,3}\\.){3}[0-9]{1,3}$",
+                message = "Must be a valid IPv4 address")
+        private String gatewayIp;
+    }
+
     public enum NetworkMode {
         ONLY_5G,
         ONLY_4G,
         HYBRID_4G_5G
+    }
+
+    public enum AuthMethod {
+        FIVE_G_AKA, EAP_AKA_PRIME
     }
 }

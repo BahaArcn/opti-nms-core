@@ -56,19 +56,42 @@ public class AlarmService {
 
     public record RaiseResult(Alarm alarm, boolean created) {}
 
+    @Audited(action = AuditAction.ACKNOWLEDGE, entityType = "Alarm")
+    public Alarm acknowledgeAlarm(String tenantId, String alarmId) {
+        Alarm alarm = alarmRepository.findByIdAndTenantId(alarmId, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Alarm not found: " + alarmId));
+
+        if (alarm.getStatus() != Alarm.AlarmStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Only ACTIVE alarms can be acknowledged. Current status: " + alarm.getStatus());
+        }
+
+        alarm.setStatus(Alarm.AlarmStatus.ACKNOWLEDGED);
+        alarm.setAcknowledgedTime(System.currentTimeMillis());
+        alarm.setAcknowledgedBy(getCurrentUsername());
+        return alarmRepository.save(alarm);
+    }
+
     @Audited(action = AuditAction.CLEAR, entityType = "Alarm")
     public void clearAlarm(String tenantId, String source, String alarmType) {
         Optional<Alarm> activeAlarm = alarmRepository.findByTenantIdAndSourceAndAlarmTypeAndStatus(
                 tenantId, source, alarmType, Alarm.AlarmStatus.ACTIVE);
 
         if (activeAlarm.isPresent()) {
-            Alarm alarm = activeAlarm.get();
-            alarm.setStatus(Alarm.AlarmStatus.CLEARED);
-            alarm.setClearedTime(System.currentTimeMillis());
-            alarm.setClearedBy(getCurrentUsername());
-
-            alarmRepository.save(alarm);
+            clearSingleAlarm(activeAlarm.get());
+        } else {
+            Optional<Alarm> ackedAlarm = alarmRepository.findByTenantIdAndSourceAndAlarmTypeAndStatus(
+                    tenantId, source, alarmType, Alarm.AlarmStatus.ACKNOWLEDGED);
+            ackedAlarm.ifPresent(this::clearSingleAlarm);
         }
+    }
+
+    private void clearSingleAlarm(Alarm alarm) {
+        alarm.setStatus(Alarm.AlarmStatus.CLEARED);
+        alarm.setClearedTime(System.currentTimeMillis());
+        alarm.setClearedBy(getCurrentUsername());
+        alarmRepository.save(alarm);
     }
 
     private String getCurrentUsername() {

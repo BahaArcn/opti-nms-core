@@ -3,15 +3,19 @@ package com.opticoms.optinmscore.domain.inventory.controller;
 import com.opticoms.optinmscore.common.util.TenantContext;
 import com.opticoms.optinmscore.domain.inventory.model.ConnectedUe;
 import com.opticoms.optinmscore.domain.inventory.model.GNodeB;
+import com.opticoms.optinmscore.domain.inventory.model.NodeResource;
 import com.opticoms.optinmscore.domain.inventory.model.PduSession;
 import com.opticoms.optinmscore.domain.inventory.service.InventoryService;
+import com.opticoms.optinmscore.domain.inventory.service.NodeResourceService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 public class InventoryController {
 
     private final InventoryService inventoryService;
+    private final NodeResourceService nodeResourceService;
 
     @Operation(summary = "List all gNodeBs with pagination")
     @GetMapping("/gnb")
@@ -92,5 +97,41 @@ public class InventoryController {
             HttpServletRequest request) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         return ResponseEntity.ok(inventoryService.getActiveSessionCount(tenantId));
+    }
+
+    // ============================
+    // Node Resource endpoints
+    // ============================
+
+    @Operation(summary = "Report node resource usage (upsert by nodeId)")
+    @PostMapping("/nodes/resources")
+    public ResponseEntity<NodeResource> reportNodeResource(
+            HttpServletRequest request,
+            @Valid @RequestBody NodeResource nodeResource) {
+        String tenantId = TenantContext.getCurrentTenantId(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(nodeResourceService.reportNodeResource(tenantId, nodeResource));
+    }
+
+    @Operation(summary = "List all node resources with pagination")
+    @GetMapping("/nodes/resources")
+    public ResponseEntity<Page<NodeResource>> listNodeResources(
+            HttpServletRequest request,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "lastReportedAt") String sortBy,
+            @RequestParam(defaultValue = "DESC") Sort.Direction sortDir) {
+        String tenantId = TenantContext.getCurrentTenantId(request);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDir, sortBy));
+        return ResponseEntity.ok(nodeResourceService.getNodeResources(tenantId, pageable));
+    }
+
+    @Operation(summary = "Get node resource by node ID")
+    @GetMapping("/nodes/resources/{nodeId}")
+    public ResponseEntity<NodeResource> getNodeResource(
+            HttpServletRequest request,
+            @PathVariable String nodeId) {
+        String tenantId = TenantContext.getCurrentTenantId(request);
+        return ResponseEntity.ok(nodeResourceService.getNodeResource(tenantId, nodeId));
     }
 }

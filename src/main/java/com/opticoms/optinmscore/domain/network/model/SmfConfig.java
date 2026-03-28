@@ -29,6 +29,18 @@ public class SmfConfig extends BaseEntity {
     @NotNull
     private SecurityIndication securityIndication = new SecurityIndication();
 
+    @Min(500) @Max(1460)
+    @Schema(description = "TCP Maximum Segment Size", example = "1340")
+    private int tcpMss = 1340;
+
+    @Min(60) @Max(86400)
+    @Schema(description = "UPF DHCP lease time in seconds", example = "7200")
+    private int dhcpLeaseTimeSec = 7200;
+
+    @Pattern(regexp = "^$|^([0-9]{1,3}\\.){3}[0-9]{1,3}$")
+    @Schema(description = "IMS Proxy-CSCF IP address for VoLTE", example = "10.0.0.100")
+    private String proxyCscfIp;
+
     // APN/DNN Listesi
     @NotEmpty(message = "APN/DNN list cannot be empty")
     private List<@Valid ApnDnn> apnList;
@@ -55,13 +67,8 @@ public class SmfConfig extends BaseEntity {
     public static class ApnDnn {
 
         @NotBlank
-        // SADECE CIDR (x.x.x.x/y) veya IP Aralığı (x.x.x.x-y.y.y.y) kabul eden özel Regex
-        @Pattern(regexp = "^([0-9]{1,3}\\.){3}[0-9]{1,3}(/[0-9]{1,2}|-([0-9]{1,3}\\.){3}[0-9]{1,3})$",
-                message = "Must be in CIDR format (e.g., 10.45.0.0/16) or Range format (e.g., 10.45.0.100-10.45.0.200)")
-        private String ueIpRange;
-
-        @NotBlank
-        private String gatewayIp;
+        @Schema(description = "References a tunInterface in GlobalConfig.ueIpPoolList", example = "ogstun")
+        private String tunInterface;
 
         @NotBlank
         private String apnDnnName;

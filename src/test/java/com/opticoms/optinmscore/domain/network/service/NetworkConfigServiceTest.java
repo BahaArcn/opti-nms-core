@@ -8,7 +8,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -65,6 +68,101 @@ class NetworkConfigServiceTest {
         assertEquals(1000L, saved.getCreatedAt());
         assertEquals(2048, saved.getMaxSupportedDevices(), "maxSupportedDevices should be preserved");
         assertEquals(128, saved.getMaxSupportedGNBs(), "maxSupportedGNBs should be preserved");
+    }
+
+    @Test
+    void saveOrUpdate_withValidPools_saves() {
+        GlobalConfig.UeIpPool pool1 = new GlobalConfig.UeIpPool();
+        pool1.setTunInterface("ogstun");
+        pool1.setIpRange("10.45.0.0/16");
+        pool1.setGatewayIp("10.45.0.1");
+
+        GlobalConfig.UeIpPool pool2 = new GlobalConfig.UeIpPool();
+        pool2.setTunInterface("ogstun2");
+        pool2.setIpRange("10.46.0.0/16");
+        pool2.setGatewayIp("10.46.0.1");
+
+        config.setUeIpPoolList(new ArrayList<>(List.of(pool1, pool2)));
+
+        when(repo.findByTenantId(TENANT)).thenReturn(Optional.empty());
+        when(repo.save(any(GlobalConfig.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        GlobalConfig saved = service.saveOrUpdateGlobalConfig(TENANT, config);
+
+        assertEquals(2, saved.getUeIpPoolList().size());
+    }
+
+    @Test
+    void saveOrUpdate_duplicateTunInterface_throws400() {
+        GlobalConfig.UeIpPool pool1 = new GlobalConfig.UeIpPool();
+        pool1.setTunInterface("ogstun");
+        pool1.setIpRange("10.45.0.0/16");
+        pool1.setGatewayIp("10.45.0.1");
+
+        GlobalConfig.UeIpPool pool2 = new GlobalConfig.UeIpPool();
+        pool2.setTunInterface("ogstun");
+        pool2.setIpRange("10.46.0.0/16");
+        pool2.setGatewayIp("10.46.0.1");
+
+        config.setUeIpPoolList(new ArrayList<>(List.of(pool1, pool2)));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> service.saveOrUpdateGlobalConfig(TENANT, config));
+        assertTrue(ex.getReason().contains("Duplicate tunInterface"));
+    }
+
+    @Test
+    void saveOrUpdate_overlappingCidr_throws400() {
+        GlobalConfig.UeIpPool pool1 = new GlobalConfig.UeIpPool();
+        pool1.setTunInterface("ogstun");
+        pool1.setIpRange("10.45.0.0/16");
+        pool1.setGatewayIp("10.45.0.1");
+
+        GlobalConfig.UeIpPool pool2 = new GlobalConfig.UeIpPool();
+        pool2.setTunInterface("ogstun2");
+        pool2.setIpRange("10.45.0.0/24");
+        pool2.setGatewayIp("10.45.0.1");
+
+        config.setUeIpPoolList(new ArrayList<>(List.of(pool1, pool2)));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> service.saveOrUpdateGlobalConfig(TENANT, config));
+        assertTrue(ex.getReason().contains("IP range overlap"));
+    }
+
+    @Test
+    void saveOrUpdate_nonOverlappingCidr_saves() {
+        GlobalConfig.UeIpPool pool1 = new GlobalConfig.UeIpPool();
+        pool1.setTunInterface("ogstun");
+        pool1.setIpRange("10.45.0.0/16");
+        pool1.setGatewayIp("10.45.0.1");
+
+        GlobalConfig.UeIpPool pool2 = new GlobalConfig.UeIpPool();
+        pool2.setTunInterface("ogstun2");
+        pool2.setIpRange("10.46.0.0/16");
+        pool2.setGatewayIp("10.46.0.1");
+
+        config.setUeIpPoolList(new ArrayList<>(List.of(pool1, pool2)));
+
+        when(repo.findByTenantId(TENANT)).thenReturn(Optional.empty());
+        when(repo.save(any(GlobalConfig.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertDoesNotThrow(() -> service.saveOrUpdateGlobalConfig(TENANT, config));
+    }
+
+    @Test
+    void cidrOverlaps_sameNetwork_returnsTrue() {
+        assertTrue(NetworkConfigService.cidrOverlaps("10.45.0.0/16", "10.45.0.0/24"));
+    }
+
+    @Test
+    void cidrOverlaps_differentNetworks_returnsFalse() {
+        assertFalse(NetworkConfigService.cidrOverlaps("10.45.0.0/16", "10.46.0.0/16"));
+    }
+
+    @Test
+    void cidrOverlaps_rangeFormat_returnsFalse() {
+        assertFalse(NetworkConfigService.cidrOverlaps("10.45.0.1-10.45.0.100", "10.45.0.0/16"));
     }
 
     @Test

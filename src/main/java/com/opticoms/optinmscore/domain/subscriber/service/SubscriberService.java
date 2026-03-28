@@ -2,6 +2,10 @@ package com.opticoms.optinmscore.domain.subscriber.service;
 
 import com.opticoms.optinmscore.domain.audit.aspect.Audited;
 import com.opticoms.optinmscore.domain.audit.model.AuditLog.AuditAction;
+import com.opticoms.optinmscore.domain.inventory.model.ConnectedUe;
+import com.opticoms.optinmscore.domain.inventory.repository.ConnectedUeRepository;
+import com.opticoms.optinmscore.domain.license.service.LicenseService;
+import com.opticoms.optinmscore.domain.policy.service.PolicyService;
 import com.opticoms.optinmscore.domain.subscriber.model.Subscriber;
 import com.opticoms.optinmscore.domain.subscriber.repository.SubscriberRepository;
 import com.opticoms.optinmscore.domain.tenant.repository.TenantRepository;
@@ -16,7 +20,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -27,11 +35,16 @@ public class SubscriberService {
     private final EncryptionService encryptionService;
     private final Open5gsProvisioningService open5gsProvisioning;
     private final TenantRepository tenantRepository;
+    private final ConnectedUeRepository connectedUeRepository;
+    private final PolicyService policyService;
+    private final LicenseService licenseService;
 
     private static final Pattern HEX_PATTERN = Pattern.compile("^[0-9a-fA-F]+$");
 
     @Audited(action = AuditAction.CREATE, entityType = "Subscriber")
     public Subscriber createSubscriber(String tenantId, Subscriber subscriber) {
+        licenseService.checkCanAddSubscriber(tenantId);
+
         String imsiHash = encryptionService.hash(subscriber.getImsi());
 
         if (subscriberRepository.existsByTenantIdAndImsiHash(tenantId, imsiHash)) {
@@ -40,6 +53,7 @@ public class SubscriberService {
         }
 
         validateKeys(subscriber);
+        validatePolicyReference(tenantId, subscriber);
         subscriber.setTenantId(tenantId);
 
         String open5gsUri = resolveOpen5gsUri(tenantId);
@@ -85,6 +99,7 @@ public class SubscriberService {
         updatedData.setTenantId(tenantId);
 
         validateKeys(updatedData);
+        validatePolicyReference(tenantId, updatedData);
 
         String open5gsUri = resolveOpen5gsUri(tenantId);
         provisionToOpen5gs(updatedData, open5gsUri);
@@ -154,11 +169,67 @@ public class SubscriberService {
     public Page<Subscriber> getAllSubscribersPaged(String tenantId, Pageable pageable) {
         Page<Subscriber> page = subscriberRepository.findByTenantId(tenantId, pageable);
         page.getContent().forEach(this::decryptSensitiveData);
+        enrichWithConnectionStatus(tenantId, page.getContent());
+        return page;
+    }
+
+    public Page<Subscriber> searchSubscribers(String tenantId, String query, Pageable pageable) {
+        if (query == null || query.isBlank()) {
+            return getAllSubscribersPaged(tenantId, pageable);
+        }
+
+        String trimmed = query.trim();
+
+        if (trimmed.matches("^\\d{15}$")) {
+            String imsiHash = encryptionService.hash(trimmed);
+            Optional<Subscriber> found = subscriberRepository.findByImsiHashAndTenantId(imsiHash, tenantId);
+            if (found.isPresent()) {
+                Subscriber sub = found.get();
+                decryptSensitiveData(sub);
+                enrichWithConnectionStatus(tenantId, List.of(sub));
+                return new org.springframework.data.domain.PageImpl<>(List.of(sub), pageable, 1);
+            }
+            return new org.springframework.data.domain.PageImpl<>(List.of(), pageable, 0);
+        }
+
+        if (trimmed.matches("^\\d{10,15}$")) {
+            String msisdnHash = encryptionService.hash(trimmed);
+            Optional<Subscriber> found = subscriberRepository.findByMsisdnHashAndTenantId(msisdnHash, tenantId);
+            if (found.isPresent()) {
+                Subscriber sub = found.get();
+                decryptSensitiveData(sub);
+                enrichWithConnectionStatus(tenantId, List.of(sub));
+                return new org.springframework.data.domain.PageImpl<>(List.of(sub), pageable, 1);
+            }
+            return new org.springframework.data.domain.PageImpl<>(List.of(), pageable, 0);
+        }
+
+        Page<Subscriber> page = subscriberRepository.findByTenantIdAndLabelContainingIgnoreCase(
+                tenantId, trimmed, pageable);
+        page.getContent().forEach(this::decryptSensitiveData);
+        enrichWithConnectionStatus(tenantId, page.getContent());
         return page;
     }
 
     public long getSubscriberCount(String tenantId) {
         return subscriberRepository.countByTenantId(tenantId);
+    }
+
+    private void enrichWithConnectionStatus(String tenantId, List<Subscriber> subscribers) {
+        Map<String, ConnectedUe> ueMap = connectedUeRepository.findByTenantId(tenantId)
+                .stream()
+                .collect(Collectors.toMap(ConnectedUe::getImsi, Function.identity(), (a, b) -> a));
+
+        for (Subscriber sub : subscribers) {
+            ConnectedUe ue = ueMap.get(sub.getImsi());
+            if (ue == null || ue.getStatus() == ConnectedUe.UeStatus.DISCONNECTED) {
+                sub.setConnectionStatus(Subscriber.ConnectionStatus.DISCONNECTED);
+            } else if (ue.getStatus() == ConnectedUe.UeStatus.CONNECTED) {
+                sub.setConnectionStatus(Subscriber.ConnectionStatus.CONNECTED);
+            } else {
+                sub.setConnectionStatus(Subscriber.ConnectionStatus.UNKNOWN);
+            }
+        }
     }
 
     private String resolveOpen5gsUri(String tenantId) {
@@ -178,6 +249,15 @@ public class SubscriberService {
             log.error("Failed to provision subscriber to Open5GS: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Failed to provision subscriber to Open5GS core: " + e.getMessage());
+        }
+    }
+
+    private void validatePolicyReference(String tenantId, Subscriber sub) {
+        if (sub.getPolicyId() != null && !sub.getPolicyId().isBlank()) {
+            if (!policyService.existsForTenant(tenantId, sub.getPolicyId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Referenced policy not found: " + sub.getPolicyId());
+            }
         }
     }
 

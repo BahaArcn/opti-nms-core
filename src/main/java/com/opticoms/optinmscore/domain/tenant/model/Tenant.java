@@ -1,6 +1,7 @@
 package com.opticoms.optinmscore.domain.tenant.model;
 
 import com.opticoms.optinmscore.common.model.BaseEntity;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -26,6 +27,9 @@ public class Tenant extends BaseEntity {
     private String smfUrl;
 
     private String open5gsMongoUri;
+
+    @Schema(description = "UPF Prometheus metrics endpoint URL (optional)", example = "http://upf:9090/metrics")
+    private String upfMetricsUrl;
 
     private boolean active = true;
 }

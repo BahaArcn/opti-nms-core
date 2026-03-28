@@ -2,6 +2,7 @@ package com.opticoms.optinmscore.domain.apn.service;
 
 import com.opticoms.optinmscore.domain.apn.model.ApnProfile;
 import com.opticoms.optinmscore.domain.apn.repository.ApnProfileRepository;
+import com.opticoms.optinmscore.domain.license.service.LicenseService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,7 @@ class ApnProfileServiceTest {
     private static final String TENANT = "OPTC-0001/0001/01";
 
     @Mock private ApnProfileRepository repository;
+    @Mock private LicenseService licenseService;
     @InjectMocks private ApnProfileService service;
 
     private ApnProfile sampleProfile;

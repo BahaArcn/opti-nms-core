@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -63,13 +64,35 @@ public class Subscriber extends BaseEntity {
     @Schema(description = "UE Uplink Hızı (bps)", example = "500000000") // 500 Mbps
     private long ueAmbrUl;
 
+    // --- SIM Type ---
+    @Schema(description = "SIM type (optional, user-entered)", example = "SIM_CARD")
+    private SimType simType;
+
+    // --- SQN ---
+    @Pattern(regexp = "^[0-9a-fA-F]{12}$", message = "SQN must be 12 hex chars (6 bytes)")
+    @Schema(description = "Authentication Sequence Number", example = "000000001153")
+    private String sqn;
+
     // --- Roaming ---
     @Schema(description = "Roaming İzni (Local Breakout)", example = "false")
     private boolean lboRoamingAllowed = false;
 
+    // --- Policy Referansı ---
+    @Schema(description = "Reference to a Policy document ID (optional)")
+    private String policyId;
+
+    // --- Edge Location ---
+    @Schema(description = "Reference to an EdgeLocation document ID (optional)")
+    private String edgeLocationId;
+
     // --- Profil Listesi ---
     @NotEmpty(message = "At least one profile is required")
     private List<@Valid SessionProfile> profileList;
+
+    // --- Computed (not persisted) ---
+    @Transient
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Computed connection status from ConnectedUe table")
+    private ConnectionStatus connectionStatus;
 
 
     // =========================================
@@ -78,6 +101,14 @@ public class Subscriber extends BaseEntity {
 
     public enum UsimType {
         OP, OPC
+    }
+
+    public enum SimType {
+        SIM_CARD, ESIM, IOT
+    }
+
+    public enum ConnectionStatus {
+        CONNECTED, DISCONNECTED, UNKNOWN
     }
 
     @Data

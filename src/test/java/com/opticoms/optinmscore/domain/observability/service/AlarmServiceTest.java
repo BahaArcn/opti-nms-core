@@ -197,6 +197,67 @@ class AlarmServiceTest {
     }
 
     @Test
+    void acknowledgeAlarm_activeAlarm_setsAcknowledged() {
+        Alarm active = buildAlarm("gNodeB-001", "LINK_DOWN", Alarm.Severity.CRITICAL);
+        active.setId("alarm-1");
+        active.setStatus(Alarm.AlarmStatus.ACTIVE);
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("operator1", null, Collections.emptyList()));
+
+        when(alarmRepository.findByIdAndTenantId("alarm-1", TENANT)).thenReturn(Optional.of(active));
+        when(alarmRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Alarm result = service.acknowledgeAlarm(TENANT, "alarm-1");
+
+        assertEquals(Alarm.AlarmStatus.ACKNOWLEDGED, result.getStatus());
+        assertEquals("operator1", result.getAcknowledgedBy());
+        assertNotNull(result.getAcknowledgedTime());
+    }
+
+    @Test
+    void acknowledgeAlarm_notActive_throwsBadRequest() {
+        Alarm cleared = buildAlarm("gNodeB-001", "LINK_DOWN", Alarm.Severity.CRITICAL);
+        cleared.setId("alarm-1");
+        cleared.setStatus(Alarm.AlarmStatus.CLEARED);
+
+        when(alarmRepository.findByIdAndTenantId("alarm-1", TENANT)).thenReturn(Optional.of(cleared));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> service.acknowledgeAlarm(TENANT, "alarm-1"));
+        assertEquals(400, ex.getStatusCode().value());
+    }
+
+    @Test
+    void acknowledgeAlarm_notFound_throws404() {
+        when(alarmRepository.findByIdAndTenantId("missing", TENANT)).thenReturn(Optional.empty());
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> service.acknowledgeAlarm(TENANT, "missing"));
+        assertEquals(404, ex.getStatusCode().value());
+    }
+
+    @Test
+    void clearAlarm_acknowledgedAlarm_getsCleared() {
+        Alarm acked = buildAlarm("gNodeB-001", "LINK_DOWN", Alarm.Severity.CRITICAL);
+        acked.setStatus(Alarm.AlarmStatus.ACKNOWLEDGED);
+
+        when(alarmRepository.findByTenantIdAndSourceAndAlarmTypeAndStatus(
+                TENANT, "gNodeB-001", "LINK_DOWN", Alarm.AlarmStatus.ACTIVE))
+                .thenReturn(Optional.empty());
+        when(alarmRepository.findByTenantIdAndSourceAndAlarmTypeAndStatus(
+                TENANT, "gNodeB-001", "LINK_DOWN", Alarm.AlarmStatus.ACKNOWLEDGED))
+                .thenReturn(Optional.of(acked));
+        when(alarmRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.clearAlarm(TENANT, "gNodeB-001", "LINK_DOWN");
+
+        ArgumentCaptor<Alarm> captor = ArgumentCaptor.forClass(Alarm.class);
+        verify(alarmRepository).save(captor.capture());
+        assertEquals(Alarm.AlarmStatus.CLEARED, captor.getValue().getStatus());
+    }
+
+    @Test
     void raiseAlarm_duplicateKeyOnSave_returnsExistingAlarm() {
         Alarm existing = buildAlarm("gNodeB-001", "LINK_DOWN", Alarm.Severity.CRITICAL);
         existing.setStatus(Alarm.AlarmStatus.ACTIVE);

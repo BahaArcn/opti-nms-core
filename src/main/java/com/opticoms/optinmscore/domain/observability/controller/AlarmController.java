@@ -51,7 +51,16 @@ public class AlarmController {
         return ResponseEntity.ok(result.alarm());
     }
 
-    @Operation(summary = "Clear an active alarm by source and alarmType")
+    @Operation(summary = "Acknowledge an active alarm")
+    @PutMapping("/{alarmId}/acknowledge")
+    public ResponseEntity<Alarm> acknowledgeAlarm(
+            HttpServletRequest request,
+            @PathVariable String alarmId) {
+        String tenantId = TenantContext.getCurrentTenantId(request);
+        return ResponseEntity.ok(alarmService.acknowledgeAlarm(tenantId, alarmId));
+    }
+
+    @Operation(summary = "Clear an active or acknowledged alarm by source and alarmType")
     @PostMapping("/clear")
     public ResponseEntity<Void> clearAlarm(
             HttpServletRequest request,

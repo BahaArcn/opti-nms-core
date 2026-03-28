@@ -1,6 +1,8 @@
 package com.opticoms.optinmscore.domain.dashboard.service;
 
+import com.opticoms.optinmscore.domain.edgelocation.repository.EdgeLocationRepository;
 import com.opticoms.optinmscore.domain.inventory.model.ConnectedUe;
+import com.opticoms.optinmscore.domain.license.service.LicenseService;
 import com.opticoms.optinmscore.domain.inventory.model.GNodeB;
 import com.opticoms.optinmscore.domain.inventory.model.PduSession;
 import com.opticoms.optinmscore.domain.inventory.repository.ConnectedUeRepository;
@@ -39,6 +41,8 @@ class DashboardServiceTest {
     @Mock private AlarmRepository alarmRepository;
     @Mock private Open5gsClient open5gsClient;
     @Mock private TenantRepository tenantRepository;
+    @Mock private EdgeLocationRepository edgeLocationRepository;
+    @Mock private LicenseService licenseService;
 
     @InjectMocks
     private DashboardService service;

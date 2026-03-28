@@ -192,6 +192,13 @@ class ConfigRenderServiceTest {
         g.setNetworkMode(mode);
         g.setMaxSupportedDevices(512);
         g.setMaxSupportedGNBs(32);
+
+        GlobalConfig.UeIpPool pool = new GlobalConfig.UeIpPool();
+        pool.setTunInterface("ogstun");
+        pool.setIpRange("10.45.0.0/16");
+        pool.setGatewayIp("10.45.0.1");
+        g.setUeIpPoolList(new ArrayList<>(List.of(pool)));
+
         return g;
     }
 
@@ -235,8 +242,7 @@ class ConfigRenderServiceTest {
 
         SmfConfig.ApnDnn dnn = new SmfConfig.ApnDnn();
         dnn.setApnDnnName("internet");
-        dnn.setUeIpRange("10.45.0.0/16");
-        dnn.setGatewayIp("10.45.0.1");
+        dnn.setTunInterface("ogstun");
         dnn.setLocal(true);
 
         SmfConfig.SliceId sid = new SmfConfig.SliceId();

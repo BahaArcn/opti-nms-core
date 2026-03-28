@@ -86,6 +86,18 @@ public class Open5gsClient {
         }
     }
 
+    public boolean isUpfHealthy(String upfMetricsUrl) {
+        if (upfMetricsUrl == null || upfMetricsUrl.isBlank()) {
+            return false;
+        }
+        try {
+            ResponseEntity<String> response = restTemplate.getForEntity(upfMetricsUrl, String.class);
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> extractItems(ResponseEntity<Map> response) {
         if (response.getBody() == null) {
