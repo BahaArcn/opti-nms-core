@@ -81,4 +81,66 @@ class TenantControllerTest {
         assertEquals("vftr-admin", response.getBody().getAdminUsername());
         verify(tenantService, never()).hardDeleteTenant(anyString());
     }
+
+    @Test
+    void getTenant_byMongoId() {
+        Tenant tenant = new Tenant();
+        tenant.setTenantId("VFTR-0001/0001/01");
+        tenant.setName("Vodafone TR");
+
+        when(tenantService.getTenantById("abc123")).thenReturn(tenant);
+
+        var response = controller.getTenant("abc123");
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("Vodafone TR", response.getBody().getName());
+        verify(tenantService).getTenantById("abc123");
+    }
+
+    @Test
+    void updateTenant_byMongoId() {
+        Tenant existing = new Tenant();
+        existing.setTenantId("VFTR-0001/0001/01");
+        existing.setName("Vodafone TR");
+
+        Tenant update = new Tenant();
+        update.setName("Vodafone TR Updated");
+        update.setAmfUrl("http://10.0.0.1:7777");
+        update.setSmfUrl("http://10.0.0.2:7777");
+
+        Tenant saved = new Tenant();
+        saved.setTenantId("VFTR-0001/0001/01");
+        saved.setName("Vodafone TR Updated");
+
+        when(tenantService.getTenantById("abc123")).thenReturn(existing);
+        when(tenantService.updateTenant("VFTR-0001/0001/01", update)).thenReturn(saved);
+
+        var response = controller.updateTenant("abc123", update);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("Vodafone TR Updated", response.getBody().getName());
+        verify(tenantService).getTenantById("abc123");
+        verify(tenantService).updateTenant("VFTR-0001/0001/01", update);
+    }
+
+    @Test
+    void deactivateTenant_byMongoId() {
+        Tenant existing = new Tenant();
+        existing.setTenantId("VFTR-0001/0001/01");
+        existing.setActive(true);
+
+        Tenant deactivated = new Tenant();
+        deactivated.setTenantId("VFTR-0001/0001/01");
+        deactivated.setActive(false);
+
+        when(tenantService.getTenantById("abc123")).thenReturn(existing);
+        when(tenantService.deactivateTenant("VFTR-0001/0001/01")).thenReturn(deactivated);
+
+        var response = controller.deactivateTenant("abc123");
+
+        assertEquals(200, response.getStatusCode().value());
+        assertFalse(response.getBody().isActive());
+        verify(tenantService).getTenantById("abc123");
+        verify(tenantService).deactivateTenant("VFTR-0001/0001/01");
+    }
 }

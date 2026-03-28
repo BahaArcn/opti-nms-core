@@ -79,24 +79,26 @@ public class TenantController {
         return ResponseEntity.ok(tenantService.listTenants());
     }
 
-    @Operation(summary = "Get tenant by tenantId")
-    @GetMapping("/{tenantId}")
-    public ResponseEntity<Tenant> getTenant(@PathVariable String tenantId) {
-        return ResponseEntity.ok(tenantService.getTenant(tenantId));
+    @Operation(summary = "Get tenant by MongoDB document id")
+    @GetMapping("/{id}")
+    public ResponseEntity<Tenant> getTenant(@PathVariable String id) {
+        return ResponseEntity.ok(tenantService.getTenantById(id));
     }
 
-    @Operation(summary = "Update tenant")
-    @PutMapping("/{tenantId}")
+    @Operation(summary = "Update tenant by MongoDB document id")
+    @PutMapping("/{id}")
     public ResponseEntity<Tenant> updateTenant(
-            @PathVariable String tenantId,
+            @PathVariable String id,
             @Valid @RequestBody Tenant tenant) {
-        return ResponseEntity.ok(tenantService.updateTenant(tenantId, tenant));
+        Tenant existing = tenantService.getTenantById(id);
+        return ResponseEntity.ok(tenantService.updateTenant(existing.getTenantId(), tenant));
     }
 
-    @Operation(summary = "Deactivate tenant (soft delete)")
-    @DeleteMapping("/{tenantId}")
-    public ResponseEntity<Tenant> deactivateTenant(@PathVariable String tenantId) {
-        return ResponseEntity.ok(tenantService.deactivateTenant(tenantId));
+    @Operation(summary = "Deactivate tenant (soft delete) by MongoDB document id")
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Tenant> deactivateTenant(@PathVariable String id) {
+        Tenant existing = tenantService.getTenantById(id);
+        return ResponseEntity.ok(tenantService.deactivateTenant(existing.getTenantId()));
     }
 
     @Data

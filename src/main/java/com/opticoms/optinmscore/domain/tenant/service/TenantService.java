@@ -32,6 +32,12 @@ public class TenantService {
                         "Tenant not found: " + tenantId));
     }
 
+    public Tenant getTenantById(String id) {
+        return tenantRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Tenant not found with id: " + id));
+    }
+
     public List<Tenant> listTenants() {
         return tenantRepository.findAll();
     }
