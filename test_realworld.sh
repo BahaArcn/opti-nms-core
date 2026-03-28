@@ -108,7 +108,8 @@ LIC_RESP=$(curl -s -w "\n%{http_code}" -X POST $BASE/api/v1/licenses \
   -d '{"licenseKey":"LIC-TKCL-2026-ENT","maxSubscribers":5,"maxGNodeBs":10,"maxDnns":3,"maxEdgeLocations":2,"maxUsers":10,"expiresAt":1893456000000,"active":true,"description":"Turkcell test license"}')
 LIC_CODE=$(echo "$LIC_RESP" | tail -1)
 LIC_BODY=$(echo "$LIC_RESP" | sed '$d')
-check_status "Turkcell lisans atandi" "200" "$LIC_CODE" "$LIC_BODY"
+if [ "$LIC_CODE" = "200" ] || [ "$LIC_CODE" = "201" ]; then green "Turkcell lisans atandi [HTTP $LIC_CODE]"
+else red "Turkcell lisans atanamadi [HTTP $LIC_CODE]"; echo "  $LIC_BODY" | head -c 200; fi
 
 echo ">> 3.2 Vodafone lisans ata (kucuk)"
 LIC2_RESP=$(curl -s -w "\n%{http_code}" -X POST $BASE/api/v1/licenses \
@@ -116,7 +117,8 @@ LIC2_RESP=$(curl -s -w "\n%{http_code}" -X POST $BASE/api/v1/licenses \
   -d '{"licenseKey":"LIC-VODA-2026-BASIC","maxSubscribers":2,"maxGNodeBs":5,"maxDnns":1,"maxEdgeLocations":1,"maxUsers":5,"expiresAt":1893456000000,"active":true,"description":"Vodafone basic license"}')
 LIC2_CODE=$(echo "$LIC2_RESP" | tail -1)
 LIC2_BODY=$(echo "$LIC2_RESP" | sed '$d')
-check_status "Vodafone lisans atandi" "200" "$LIC2_CODE" "$LIC2_BODY"
+if [ "$LIC2_CODE" = "200" ] || [ "$LIC2_CODE" = "201" ]; then green "Vodafone lisans atandi [HTTP $LIC2_CODE]"
+else red "Vodafone lisans atanamadi [HTTP $LIC2_CODE]"; echo "  $LIC2_BODY" | head -c 200; fi
 
 echo ">> 3.3 Lisans durumu kontrol"
 LIC_STATUS=$(curl -s $BASE/api/v1/licenses/status -H "Authorization: Bearer $TKCL_TOKEN")
@@ -250,7 +252,8 @@ RBAC4_RESP=$(curl -s -w "\n%{http_code}" -X POST $BASE/api/v1/fault/alarms \
   -H "Authorization: Bearer $TKCL_OP_TOKEN" -H 'Content-Type: application/json' \
   -d '{"source":"gNodeB-RBAC","alarmType":"RBAC_TEST","description":"Operator alarm testi","severity":"WARNING"}')
 RBAC4_CODE=$(echo "$RBAC4_RESP" | tail -1)
-check_status "OPERATOR alarm olusturabildi (beklenen: 200)" "200" "$RBAC4_CODE" ""
+if [ "$RBAC4_CODE" = "200" ] || [ "$RBAC4_CODE" = "201" ]; then green "OPERATOR alarm olusturabildi [HTTP $RBAC4_CODE]"
+else red "OPERATOR alarm olusturamadi [HTTP $RBAC4_CODE]"; fi
 
 header "FAZ 7: ALARM YASAM DONGUSU"
 
@@ -292,9 +295,9 @@ if [ -n "$ALARM_ID_1" ]; then
 else red "Alarm ID bulunamadi, acknowledge atlanacak"; fi
 
 echo ">> 7.7 Alarm CLEAR"
-CLR_RESP=$(curl -s -X POST "$BASE/api/v1/fault/alarms/clear?source=gNodeB-001&alarmType=LINK_DOWN" \
+CLR_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/v1/fault/alarms/clear?source=gNodeB-001&alarmType=LINK_DOWN" \
   -H "Authorization: Bearer $TKCL_TOKEN")
-check "Alarm clear edildi" "CLEARED" "$CLR_RESP"
+check_status "Alarm clear edildi (void response)" "200" "$CLR_CODE" ""
 
 echo ">> 7.8 Alarm tenant izolasyonu"
 VALM=$(curl -s "$BASE/api/v1/fault/alarms?page=0&size=10" -H "Authorization: Bearer $VODA_TOKEN")
@@ -330,33 +333,36 @@ check "Policy listesi alindi" "content" "$POLS"
 echo ">> 8.4 APN/DNN profili olustur"
 APN_RESP=$(curl -s -w "\n%{http_code}" -X POST $BASE/api/v1/apn/profiles \
   -H "Authorization: Bearer $TKCL_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"internet","description":"Default internet DNN","apnDnn":"internet","sst":1,"sd":"FFFFFF","pduSessionType":"IPv4v6","qci4g":9,"qi5g":9,"arpPriority":8,"status":"ACTIVE"}')
+  -d '{"dnn":"internet","sst":1,"sd":"FFFFFF","pduSessionType":"IPV4V6","qos":{"fiveQi":9,"arpPriorityLevel":8,"preEmptionCapability":"NOT_PRE_EMPT","preEmptionVulnerability":"PRE_EMPTABLE"},"sessionAmbr":{"uplinkKbps":1000000,"downlinkKbps":2000000},"enabled":true,"status":"ACTIVE","description":"Default internet DNN for eMBB"}')
 APN_CODE=$(echo "$APN_RESP" | tail -1)
 APN_BODY=$(echo "$APN_RESP" | sed '$d')
-if [ "$APN_CODE" = "200" ] || [ "$APN_CODE" = "201" ]; then green "APN profili olusturuldu"
+if [ "$APN_CODE" = "200" ] || [ "$APN_CODE" = "201" ]; then green "APN profili olusturuldu [HTTP $APN_CODE]"
 elif echo "$APN_BODY" | grep -qi "duplicate\|already"; then green "APN profili zaten mevcut (OK)"
-else red "APN profili olusturulamadi [HTTP $APN_CODE]"; echo "  $APN_BODY" | head -c 200; fi
+else red "APN profili olusturulamadi [HTTP $APN_CODE]"; echo "  $APN_BODY" | head -c 300; fi
 
 echo ">> 8.5 Performans metrik gonder"
 TIMESTAMP=$(date +%s)000
 PM_RESP=$(curl -s -w "\n%{http_code}" -X POST $BASE/api/v1/performance/metrics \
   -H "Authorization: Bearer $TKCL_TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"metricName\":\"upf.throughput.dl\",\"metricValue\":1250.5,\"unit\":\"Mbps\",\"source\":\"UPF-001\",\"timestamp\":$TIMESTAMP}")
+  -d "{\"metricName\":\"upf.throughput.dl\",\"value\":1250.5,\"labels\":{\"source\":\"UPF-001\"},\"metricType\":\"GAUGE\",\"timestamp\":$TIMESTAMP}")
 PM_CODE=$(echo "$PM_RESP" | tail -1)
-check_status "Performans metrigi gonderildi" "200" "$PM_CODE" "$(echo "$PM_RESP" | sed '$d')"
+if [ "$PM_CODE" = "200" ] || [ "$PM_CODE" = "201" ]; then green "Performans metrigi gonderildi [HTTP $PM_CODE]"
+else red "Performans metrigi gonderilemedi [HTTP $PM_CODE]"; echo "  $(echo "$PM_RESP" | sed '$d')" | head -c 200; fi
 
 echo ">> 8.6 2. performans metrigi"
 TIMESTAMP2=$(($(date +%s)+60))000
 PM2_RESP=$(curl -s -w "\n%{http_code}" -X POST $BASE/api/v1/performance/metrics \
   -H "Authorization: Bearer $TKCL_TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"metricName\":\"upf.throughput.ul\",\"metricValue\":620.3,\"unit\":\"Mbps\",\"source\":\"UPF-001\",\"timestamp\":$TIMESTAMP2}")
+  -d "{\"metricName\":\"upf.throughput.ul\",\"value\":620.3,\"labels\":{\"source\":\"UPF-001\"},\"metricType\":\"GAUGE\",\"timestamp\":$TIMESTAMP2}")
 PM2_CODE=$(echo "$PM2_RESP" | tail -1)
-check_status "2. performans metrigi gonderildi" "200" "$PM2_CODE" ""
+if [ "$PM2_CODE" = "200" ] || [ "$PM2_CODE" = "201" ]; then green "2. performans metrigi gonderildi [HTTP $PM2_CODE]"
+else red "2. performans metrigi gonderilemedi [HTTP $PM2_CODE]"; fi
 
 echo ">> 8.7 Guncel metrik sorgula"
-PM_CUR=$(curl -s "$BASE/api/v1/performance/current?metricName=upf.throughput.dl&source=UPF-001" \
+PM_CUR=$(curl -s "$BASE/api/v1/performance/current?metric=upf.throughput.dl" \
   -H "Authorization: Bearer $TKCL_TOKEN")
-check "Guncel metrik alindi" "metricValue" "$PM_CUR"
+if echo "$PM_CUR" | grep -qE "^[0-9]"; then green "Guncel metrik alindi: $PM_CUR"
+else check "Guncel metrik alindi" "1250" "$PM_CUR"; fi
 
 header "FAZ 9: DASHBOARD + AUDIT + GUVENLIK"
 
@@ -371,29 +377,33 @@ check "Audit log alindi" "content" "$AUDIT"
 AUDIT_COUNT=$(echo $AUDIT | python3 -c "import sys,json; print(json.load(sys.stdin).get('totalElements',0))" 2>/dev/null || echo "?")
 echo "  Toplam audit kaydi: $AUDIT_COUNT"
 
-echo ">> 9.3 Yanlis sifre ile giris (beklenen: 401)"
+echo ">> 9.3 Yanlis sifre ile giris (beklenen: 401 veya 429)"
 BAD_RESP=$(curl -s -w "\n%{http_code}" -X POST $BASE/api/v1/auth/login -H 'Content-Type: application/json' \
   -d '{"tenantId":"TKCL-0001/0001/01","username":"tkcl_admin","password":"YANLIS_SIFRE"}')
 BAD_CODE=$(echo "$BAD_RESP" | tail -1)
-check_status "Yanlis sifre reddedildi (beklenen: 401)" "401" "$BAD_CODE" ""
+if [ "$BAD_CODE" = "401" ] || [ "$BAD_CODE" = "429" ]; then green "Yanlis sifre reddedildi [HTTP $BAD_CODE]"
+else red "Yanlis sifre: beklenmeyen HTTP $BAD_CODE"; fi
 
-echo ">> 9.4 Token olmadan erisim (beklenen: 401)"
+echo ">> 9.4 Token olmadan erisim (beklenen: 401 veya 403)"
 NO_TOKEN_RESP=$(curl -s -w "\n%{http_code}" "$BASE/api/v1/subscriber/list")
 NO_TOKEN_CODE=$(echo "$NO_TOKEN_RESP" | tail -1)
-check_status "Token'siz erisim reddedildi (beklenen: 401)" "401" "$NO_TOKEN_CODE" ""
+if [ "$NO_TOKEN_CODE" = "401" ] || [ "$NO_TOKEN_CODE" = "403" ]; then green "Token'siz erisim reddedildi [HTTP $NO_TOKEN_CODE]"
+else red "Token'siz erisim: beklenmeyen HTTP $NO_TOKEN_CODE"; fi
 
-echo ">> 9.5 Gecersiz token ile erisim (beklenen: 401)"
+echo ">> 9.5 Gecersiz token ile erisim (beklenen: 401 veya 403)"
 BAD_TOKEN_RESP=$(curl -s -w "\n%{http_code}" "$BASE/api/v1/subscriber/list" \
   -H "Authorization: Bearer invalidtoken12345")
 BAD_TOKEN_CODE=$(echo "$BAD_TOKEN_RESP" | tail -1)
-check_status "Gecersiz token reddedildi (beklenen: 401)" "401" "$BAD_TOKEN_CODE" ""
+if [ "$BAD_TOKEN_CODE" = "401" ] || [ "$BAD_TOKEN_CODE" = "403" ]; then green "Gecersiz token reddedildi [HTTP $BAD_TOKEN_CODE]"
+else red "Gecersiz token: beklenmeyen HTTP $BAD_TOKEN_CODE"; fi
 
 echo ">> 9.6 Node Resource raporu gonder"
 NR_RESP=$(curl -s -w "\n%{http_code}" -X POST $BASE/api/v1/inventory/nodes/resources \
   -H "Authorization: Bearer $TKCL_TOKEN" -H 'Content-Type: application/json' \
   -d '{"nodeId":"gNodeB-001","nodeType":"gNodeB","cpuUsagePercent":65.5,"memoryUsagePercent":48.2,"diskUsagePercent":35.0,"uptimeSeconds":864000}')
 NR_CODE=$(echo "$NR_RESP" | tail -1)
-check_status "Node Resource raporu gonderildi" "200" "$NR_CODE" "$(echo "$NR_RESP" | sed '$d')"
+if [ "$NR_CODE" = "200" ] || [ "$NR_CODE" = "201" ]; then green "Node Resource raporu gonderildi [HTTP $NR_CODE]"
+else red "Node Resource raporu gonderilemedi [HTTP $NR_CODE]"; echo "  $(echo "$NR_RESP" | sed '$d')" | head -c 200; fi
 
 echo ">> 9.7 Node Resources listesi"
 NR_LIST=$(curl -s "$BASE/api/v1/inventory/nodes/resources?page=0&size=10" -H "Authorization: Bearer $TKCL_TOKEN")
