@@ -174,7 +174,7 @@ public class SecurityConfiguration {
 
         configuration.setAllowedOriginPatterns(List.of(allowedOrigins.split(",")));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-ID"));
         configuration.setExposedHeaders(List.of(
                 "X-Total-Count", "X-Total-Pages",
                 "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"));
