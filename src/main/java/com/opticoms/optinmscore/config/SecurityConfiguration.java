@@ -178,7 +178,7 @@ public class SecurityConfiguration {
         configuration.setExposedHeaders(List.of(
                 "X-Total-Count", "X-Total-Pages",
                 "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"));
-        configuration.setAllowCredentials(!"*".equals(allowedOrigins.trim()));
+        configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
