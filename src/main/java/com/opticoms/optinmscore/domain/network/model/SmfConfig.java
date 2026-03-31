@@ -16,17 +16,15 @@ import java.util.List;
 @Document(collection = "smf_configs")
 public class SmfConfig extends BaseEntity {
 
-    // Tabloda 1280 ile 1500 arası istenmiş, default 1400
     @Min(1280)
     @Max(1500)
-    private int mtu = 1400;
+    @Schema(description = "SMF-specific MTU override. If not set, falls back to GlobalConfig.mtu", example = "1400")
+    private Integer smfMtu;
 
-    // DNS IP'leri: En az 1 tane girilmesi zorunlu
-    @NotEmpty(message = "At least one DNS IP is required")
-    private List<String> dnsIps;
+    @Schema(description = "SMF-specific DNS override. If not set, falls back to GlobalConfig.dnsIps")
+    private List<String> smfDnsIps;
 
-    // 5G Güvenlik Belirteçleri
-    @NotNull
+    @Schema(description = "5G NAS security indication (required when 5G or HYBRID mode)")
     private SecurityIndication securityIndication = new SecurityIndication();
 
     @Min(500) @Max(1460)

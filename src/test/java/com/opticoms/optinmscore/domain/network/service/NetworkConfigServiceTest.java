@@ -24,6 +24,9 @@ class NetworkConfigServiceTest {
     private static final String TENANT = "OPTC-0001/0001/01";
 
     @Mock private GlobalConfigRepository repo;
+    @Mock private AmfConfigRepository amfConfigRepository;
+    @Mock private SmfConfigRepository smfConfigRepository;
+    @Mock private UpfConfigRepository upfConfigRepository;
     @InjectMocks private NetworkConfigService service;
 
     private GlobalConfig config;
@@ -57,6 +60,7 @@ class NetworkConfigServiceTest {
         existing.setCreatedBy("admin");
         existing.setMaxSupportedDevices(2048);
         existing.setMaxSupportedGNBs(128);
+        existing.setNetworkMode(GlobalConfig.NetworkMode.ONLY_5G);
 
         when(repo.findByTenantId(TENANT)).thenReturn(Optional.of(existing));
         when(repo.save(any(GlobalConfig.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -68,6 +72,49 @@ class NetworkConfigServiceTest {
         assertEquals(1000L, saved.getCreatedAt());
         assertEquals(2048, saved.getMaxSupportedDevices(), "maxSupportedDevices should be preserved");
         assertEquals(128, saved.getMaxSupportedGNBs(), "maxSupportedGNBs should be preserved");
+    }
+
+    @Test
+    void saveOrUpdate_modeChange_incompatibleAmf_throwsConflict() {
+        GlobalConfig existing = new GlobalConfig();
+        existing.setId("id");
+        existing.setNetworkMode(GlobalConfig.NetworkMode.ONLY_5G);
+        existing.setNetworkFullName("Test");
+        existing.setNetworkShortName("T");
+
+        when(repo.findByTenantId(TENANT)).thenReturn(Optional.of(existing));
+
+        AmfConfig amf = new AmfConfig();
+        amf.setAmfName("amf");
+        when(amfConfigRepository.findByTenantId(TENANT)).thenReturn(Optional.of(amf));
+        when(upfConfigRepository.findByTenantId(TENANT)).thenReturn(Optional.empty());
+
+        GlobalConfig hybridConfig = new GlobalConfig();
+        hybridConfig.setNetworkFullName("Test");
+        hybridConfig.setNetworkShortName("T");
+        hybridConfig.setNetworkMode(GlobalConfig.NetworkMode.HYBRID_4G_5G);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> service.saveOrUpdateGlobalConfig(TENANT, hybridConfig));
+        assertEquals(409, ex.getStatusCode().value());
+        assertTrue(ex.getReason().contains("mmeName"));
+    }
+
+    @Test
+    void saveOrUpdate_modeChange_compatible_saves() {
+        GlobalConfig existing = new GlobalConfig();
+        existing.setId("id");
+        existing.setNetworkMode(GlobalConfig.NetworkMode.HYBRID_4G_5G);
+        existing.setNetworkFullName("Test");
+        existing.setNetworkShortName("T");
+
+        when(repo.findByTenantId(TENANT)).thenReturn(Optional.of(existing));
+        when(amfConfigRepository.findByTenantId(TENANT)).thenReturn(Optional.empty());
+        when(upfConfigRepository.findByTenantId(TENANT)).thenReturn(Optional.empty());
+        when(repo.save(any(GlobalConfig.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        GlobalConfig saved = service.saveOrUpdateGlobalConfig(TENANT, config);
+        assertEquals(GlobalConfig.NetworkMode.ONLY_5G, saved.getNetworkMode());
     }
 
     @Test

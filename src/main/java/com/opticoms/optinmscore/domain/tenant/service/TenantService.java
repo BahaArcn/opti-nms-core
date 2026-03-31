@@ -52,6 +52,7 @@ public class TenantService {
         existing.setAmfUrl(update.getAmfUrl());
         existing.setSmfUrl(update.getSmfUrl());
         existing.setOpen5gsMongoUri(update.getOpen5gsMongoUri());
+        existing.setUpfMetricsUrl(update.getUpfMetricsUrl());
         if (update.isActive() != existing.isActive()) {
             existing.setActive(update.isActive());
         }

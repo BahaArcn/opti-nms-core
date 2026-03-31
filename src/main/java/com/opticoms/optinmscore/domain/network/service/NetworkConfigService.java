@@ -2,9 +2,16 @@ package com.opticoms.optinmscore.domain.network.service;
 
 import com.opticoms.optinmscore.domain.audit.aspect.Audited;
 import com.opticoms.optinmscore.domain.audit.model.AuditLog.AuditAction;
+import com.opticoms.optinmscore.domain.network.model.AmfConfig;
 import com.opticoms.optinmscore.domain.network.model.GlobalConfig;
+import com.opticoms.optinmscore.domain.network.model.SmfConfig;
+import com.opticoms.optinmscore.domain.network.model.UpfConfig;
+import com.opticoms.optinmscore.domain.network.repository.AmfConfigRepository;
 import com.opticoms.optinmscore.domain.network.repository.GlobalConfigRepository;
+import com.opticoms.optinmscore.domain.network.repository.SmfConfigRepository;
+import com.opticoms.optinmscore.domain.network.repository.UpfConfigRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -13,17 +20,16 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NetworkConfigService {
 
-    // Dependency Injection (Bağımlılık Enjeksiyonu)
-    // @RequiredArgsConstructor sayesinde Spring bu repository'yi bizim için otomatik olarak "new"ler.
     private final GlobalConfigRepository globalConfigRepository;
+    private final AmfConfigRepository amfConfigRepository;
+    private final SmfConfigRepository smfConfigRepository;
+    private final UpfConfigRepository upfConfigRepository;
 
-    /**
-     * İş Kuralı 1: Müşterinin ayarını kaydet veya zaten varsa GÜNCELLE.
-     */
     @Audited(action = AuditAction.UPDATE, entityType = "GlobalConfig")
     public GlobalConfig saveOrUpdateGlobalConfig(String tenantId, GlobalConfig newConfig) {
 
@@ -33,6 +39,13 @@ public class NetworkConfigService {
 
         if (existingConfigOpt.isPresent()) {
             GlobalConfig existingConfig = existingConfigOpt.get();
+
+            if (existingConfig.getNetworkMode() != newConfig.getNetworkMode()) {
+                log.info("Network mode changed for tenant {}: {} → {}",
+                        tenantId, existingConfig.getNetworkMode(), newConfig.getNetworkMode());
+                validateModeChangeCompatibility(tenantId, newConfig.getNetworkMode());
+            }
+
             newConfig.setId(existingConfig.getId());
             newConfig.setVersion(existingConfig.getVersion());
             newConfig.setCreatedAt(existingConfig.getCreatedAt());
@@ -45,13 +58,59 @@ public class NetworkConfigService {
         return globalConfigRepository.save(newConfig);
     }
 
-    /**
-     * İş Kuralı 2: Müşterinin ayarını getir. Yoksa hata fırlat.
-     */
     public GlobalConfig getGlobalConfig(String tenantId) {
         return globalConfigRepository.findByTenantId(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Global Configuration not found for tenant: " + tenantId));
+    }
+
+    /**
+     * When switching network mode, verify existing AMF/SMF/UPF configs
+     * have the fields required by the new mode. Rejects the change if
+     * existing configs would become invalid.
+     */
+    private void validateModeChangeCompatibility(String tenantId, GlobalConfig.NetworkMode newMode) {
+        boolean needs5g = newMode == GlobalConfig.NetworkMode.ONLY_5G
+                || newMode == GlobalConfig.NetworkMode.HYBRID_4G_5G;
+        boolean needs4g = newMode == GlobalConfig.NetworkMode.ONLY_4G
+                || newMode == GlobalConfig.NetworkMode.HYBRID_4G_5G;
+
+        List<String> warnings = new ArrayList<>();
+
+        amfConfigRepository.findByTenantId(tenantId).ifPresent(amf -> {
+            if (needs5g) {
+                if (amf.getAmfName() == null || amf.getAmfName().isBlank())
+                    warnings.add("AMF config missing amfName (required for 5G)");
+                if (amf.getAmfId() == null)
+                    warnings.add("AMF config missing amfId (required for 5G)");
+                if (amf.getSupportedSlices() == null || amf.getSupportedSlices().isEmpty())
+                    warnings.add("AMF config missing supportedSlices (required for 5G)");
+            }
+            if (needs4g) {
+                if (amf.getMmeName() == null || amf.getMmeName().isBlank())
+                    warnings.add("AMF config missing mmeName (required for 4G)");
+                if (amf.getMmeId() == null)
+                    warnings.add("AMF config missing mmeId (required for 4G)");
+            }
+        });
+
+        upfConfigRepository.findByTenantId(tenantId).ifPresent(upf -> {
+            if (needs5g && isBlank(upf.getN3InterfaceIp()))
+                warnings.add("UPF config missing n3InterfaceIp (required for 5G)");
+            if (needs4g && isBlank(upf.getS1uInterfaceIp()))
+                warnings.add("UPF config missing s1uInterfaceIp (required for 4G)");
+        });
+
+        if (!warnings.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cannot switch to " + newMode + " — existing configs are incompatible: "
+                            + String.join("; ", warnings)
+                            + ". Update AMF/SMF/UPF configs first, then change the network mode.");
+        }
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 
     private void validateUeIpPoolList(List<GlobalConfig.UeIpPool> pools) {

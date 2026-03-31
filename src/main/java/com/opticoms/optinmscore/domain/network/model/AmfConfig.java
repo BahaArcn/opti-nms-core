@@ -16,41 +16,41 @@ import java.util.List;
 @Document(collection = "amf_configs")
 public class AmfConfig extends BaseEntity {
 
-    @NotBlank
+    @Schema(description = "AMF name (required when 5G or HYBRID mode)")
     private String amfName;
 
-    private String mmeName; // 4G açıksa
+    @Schema(description = "MME name (required when 4G or HYBRID mode)")
+    private String mmeName;
 
-    // --- ID'ler ---
     @Valid
-    @NotNull
+    @Schema(description = "AMF identifier: region/set/pointer (required when 5G or HYBRID mode)")
     private AmfId amfId;
 
     @Valid
-    private MmeId mmeId; // Sadece 4G için
+    @Schema(description = "MME identifier: MMEGI/MMEC (required when 4G or HYBRID mode)")
+    private MmeId mmeId;
 
-    // --- Arayüz IP'leri ---
-    private String n2InterfaceIp; // 5G için NIC listesinden
-    private String s1cInterfaceIp; // 4G için NIC listesinden
+    @Schema(description = "NGAP interface IP (5G)")
+    private String n2InterfaceIp;
 
-    // --- Listeler ---
+    @Schema(description = "S1AP interface IP (4G)")
+    private String s1cInterfaceIp;
+
     @NotEmpty
     private List<@Valid Plmn> supportedPlmns;
 
     @NotEmpty
     private List<@Valid Tai> supportedTais;
 
-    @NotEmpty
+    @Schema(description = "Network slices (required when 5G or HYBRID mode)")
     private List<@Valid Slice> supportedSlices;
 
-    // --- Güvenlik & Timerlar ---
-    @NotNull
     private SecurityParameters securityParameters = new SecurityParameters();
 
-    @NotNull
+    @Schema(description = "5G NAS timers (required when 5G or HYBRID mode)")
     private NasTimers5g nasTimers5g = new NasTimers5g();
 
-    @NotNull
+    @Schema(description = "4G NAS timers (required when 4G or HYBRID mode)")
     private NasTimers4g nasTimers4g = new NasTimers4g();
 
     // =========================================

@@ -18,6 +18,8 @@ public interface ApnProfileRepository extends MongoRepository<ApnProfile, String
 
     Optional<ApnProfile> findByTenantIdAndDnnAndSst(String tenantId, String dnn, Integer sst);
 
+    Optional<ApnProfile> findFirstByTenantIdAndDnnAndEnabledTrue(String tenantId, String dnn);
+
     List<ApnProfile> findByTenantIdAndStatus(String tenantId, ApnProfile.ProfileStatus status);
 
     List<ApnProfile> findByTenantIdAndSst(String tenantId, Integer sst);

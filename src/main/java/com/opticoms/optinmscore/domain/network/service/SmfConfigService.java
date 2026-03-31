@@ -26,6 +26,7 @@ public class SmfConfigService {
     @Audited(action = AuditAction.UPDATE, entityType = "SmfConfig")
     public SmfConfig saveOrUpdateSmfConfig(String tenantId, SmfConfig newConfig) {
         validateTunInterfaceReferences(tenantId, newConfig);
+        validateForNetworkMode(tenantId, newConfig);
 
         Optional<SmfConfig> existingOpt = smfConfigRepository.findByTenantId(tenantId);
 
@@ -44,6 +45,20 @@ public class SmfConfigService {
         return smfConfigRepository.findByTenantId(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "SMF Configuration not found for tenant: " + tenantId));
+    }
+
+    private void validateForNetworkMode(String tenantId, SmfConfig config) {
+        GlobalConfig.NetworkMode mode = globalConfigRepository.findByTenantId(tenantId)
+                .map(GlobalConfig::getNetworkMode)
+                .orElse(GlobalConfig.NetworkMode.ONLY_5G);
+
+        boolean needs5g = mode == GlobalConfig.NetworkMode.ONLY_5G
+                || mode == GlobalConfig.NetworkMode.HYBRID_4G_5G;
+
+        if (needs5g && config.getSecurityIndication() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "securityIndication is required in " + mode + " mode");
+        }
     }
 
     private void validateTunInterfaceReferences(String tenantId, SmfConfig config) {

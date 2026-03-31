@@ -199,6 +199,17 @@ class ConfigRenderServiceTest {
         pool.setGatewayIp("10.45.0.1");
         g.setUeIpPoolList(new ArrayList<>(List.of(pool)));
 
+        g.setMtu(1400);
+        g.setDnsIps(List.of("8.8.8.8"));
+
+        GlobalConfig.Plmn gPlmn = new GlobalConfig.Plmn();
+        gPlmn.setMcc("001");
+        gPlmn.setMnc("01");
+        GlobalConfig.Tai gTai = new GlobalConfig.Tai();
+        gTai.setPlmn(gPlmn);
+        gTai.setTac(1);
+        g.setTaiList(List.of(gTai));
+
         return g;
     }
 
@@ -236,8 +247,8 @@ class ConfigRenderServiceTest {
 
     private SmfConfig buildSmf() {
         SmfConfig s = new SmfConfig();
-        s.setMtu(1400);
-        s.setDnsIps(List.of("8.8.8.8"));
+        s.setSmfMtu(1400);
+        s.setSmfDnsIps(List.of("8.8.8.8"));
         s.setSecurityIndication(new SmfConfig.SecurityIndication());
 
         SmfConfig.ApnDnn dnn = new SmfConfig.ApnDnn();

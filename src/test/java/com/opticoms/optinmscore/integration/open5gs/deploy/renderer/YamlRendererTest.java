@@ -41,6 +41,17 @@ class YamlRendererTest {
 
         global.setUeIpPoolList(new ArrayList<>(List.of(pool1, pool2)));
 
+        global.setMtu(1400);
+        global.setDnsIps(List.of("8.8.8.8", "8.8.4.4"));
+
+        GlobalConfig.Plmn globalPlmn = new GlobalConfig.Plmn();
+        globalPlmn.setMcc("999");
+        globalPlmn.setMnc("70");
+        GlobalConfig.Tai globalTai = new GlobalConfig.Tai();
+        globalTai.setPlmn(globalPlmn);
+        globalTai.setTac(1);
+        global.setTaiList(List.of(globalTai));
+
         amf = new AmfConfig();
         amf.setAmfName("open5gs-amf0");
 
@@ -71,8 +82,8 @@ class YamlRendererTest {
         amf.setNasTimers4g(new AmfConfig.NasTimers4g());
 
         smf = new SmfConfig();
-        smf.setMtu(1400);
-        smf.setDnsIps(List.of("8.8.8.8", "8.8.4.4"));
+        smf.setSmfMtu(1400);
+        smf.setSmfDnsIps(List.of("8.8.8.8", "8.8.4.4"));
         smf.setSecurityIndication(new SmfConfig.SecurityIndication());
 
         SmfConfig.ApnDnn dnn1 = new SmfConfig.ApnDnn();

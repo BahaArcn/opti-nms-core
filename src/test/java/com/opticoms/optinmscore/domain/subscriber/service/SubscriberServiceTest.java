@@ -1,5 +1,6 @@
 package com.opticoms.optinmscore.domain.subscriber.service;
 
+import com.opticoms.optinmscore.domain.apn.repository.ApnProfileRepository;
 import com.opticoms.optinmscore.domain.inventory.repository.ConnectedUeRepository;
 import com.opticoms.optinmscore.domain.license.service.LicenseService;
 import com.opticoms.optinmscore.domain.policy.service.PolicyService;
@@ -42,6 +43,7 @@ class SubscriberServiceTest {
     @Mock private ConnectedUeRepository connectedUeRepository;
     @Mock private PolicyService policyService;
     @Mock private LicenseService licenseService;
+    @Mock private ApnProfileRepository apnProfileRepository;
 
     @InjectMocks
     private SubscriberService service;

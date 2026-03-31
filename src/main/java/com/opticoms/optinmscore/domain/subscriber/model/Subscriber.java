@@ -114,31 +114,31 @@ public class Subscriber extends BaseEntity {
     @Data
     public static class SessionProfile {
 
-        @Min(1) @Max(255)
-        @Schema(description = "Slice Service Type (SST, 1-5=standardized, 128-255=operator-specific)", example = "1")
+        @Min(0) @Max(255)
+        @Schema(description = "Slice Service Type (SST). 0 = auto-fill from DNN profile", example = "1")
         private int sst;
 
-        @Schema(description = "Slice Differentiator (SD)", example = "000001")
-        private String sd = "FFFFFF";
+        @Schema(description = "Slice Differentiator (SD). Auto-filled from DNN if not set", example = "FFFFFF")
+        private String sd;
 
         @NotBlank
         @Schema(description = "Data Network Name (APN)", example = "internet")
         private String apnDnn;
 
-        @Min(1) @Max(127)
-        @Schema(description = "4G QoS Class Identifier", example = "9")
+        @Min(0) @Max(127)
+        @Schema(description = "4G QoS Class Identifier. 0 = auto-fill from DNN profile", example = "9")
         private int qci4g;
 
-        @Min(1) @Max(127)
-        @Schema(description = "5G QoS Identifier", example = "9")
+        @Min(0) @Max(127)
+        @Schema(description = "5G QoS Identifier. 0 = auto-fill from DNN profile", example = "9")
         private int qi5g;
 
-        @Min(1) @Max(3)
-        @Schema(description = "PDU Session Type (1=IPv4, 2=IPv6, 3=IPv4v6)", example = "1")
-        private int pduType = 1;
+        @Min(0) @Max(3)
+        @Schema(description = "PDU Session Type (1=IPv4, 2=IPv6, 3=IPv4v6). 0 = auto-fill from DNN profile", example = "1")
+        private int pduType;
 
-        @Min(1) @Max(15)
-        @Schema(description = "Allocation Retention Priority (1 en yüksek)", example = "8")
+        @Min(0) @Max(15)
+        @Schema(description = "Allocation Retention Priority. 0 = auto-fill from DNN profile", example = "8")
         private int arpPriority;
 
         @Schema(example = "false")
@@ -147,13 +147,13 @@ public class Subscriber extends BaseEntity {
         @Schema(example = "false")
         private boolean preemptionVulnerability = false;
 
-        @Schema(description = "Oturum Bazlı DL Hızı", example = "500000000")
+        @Schema(description = "Session DL rate (bps). 0 = auto-fill from DNN profile", example = "500000000")
         private long sessionAmbrDl;
 
-        @Schema(description = "Oturum Bazlı UL Hızı", example = "250000000")
+        @Schema(description = "Session UL rate (bps). 0 = auto-fill from DNN profile", example = "250000000")
         private long sessionAmbrUl;
 
-        @Schema(description = "Statik IP (Opsiyonel)", example = "192.168.1.100")
+        @Schema(description = "Static IP (optional)", example = "192.168.1.100")
         private String staticIp;
     }
 }

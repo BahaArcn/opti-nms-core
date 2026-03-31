@@ -60,10 +60,10 @@ public class NrfYamlRenderer {
         // ── nrf ─────────────────────────────────────────────────────────────
         Map<String, Object> nrfSection = new LinkedHashMap<>();
 
-        // serving: NRF'in hizmet verdiği PLMN'ler
-        // AmfConfig.supportedPlmns → nrf.serving[*].plmn_id
+        // serving: Global TAI PLMNs > AMF fallback
         List<Map<String, Object>> servingList = new ArrayList<>();
-        for (AmfConfig.Plmn plmn : amf.getSupportedPlmns()) {
+        List<GlobalConfig.Plmn> plmns = extractUniquePlmns(global, amf);
+        for (GlobalConfig.Plmn plmn : plmns) {
             Map<String, Object> entry = new LinkedHashMap<>();
             Map<String, Object> plmnId = new LinkedHashMap<>();
             plmnId.put("mcc", Integer.parseInt(plmn.getMcc()));
@@ -79,6 +79,28 @@ public class NrfYamlRenderer {
         root.put("nrf", nrfSection);
 
         return yaml.dump(root);
+    }
+
+    private List<GlobalConfig.Plmn> extractUniquePlmns(GlobalConfig global, AmfConfig amf) {
+        List<GlobalConfig.Plmn> result = new ArrayList<>();
+
+        if (global.getTaiList() != null && !global.getTaiList().isEmpty()) {
+            for (GlobalConfig.Tai tai : global.getTaiList()) {
+                GlobalConfig.Plmn p = tai.getPlmn();
+                if (result.stream().noneMatch(r ->
+                        r.getMcc().equals(p.getMcc()) && r.getMnc().equals(p.getMnc()))) {
+                    result.add(p);
+                }
+            }
+        } else if (amf.getSupportedPlmns() != null) {
+            for (AmfConfig.Plmn ap : amf.getSupportedPlmns()) {
+                GlobalConfig.Plmn gp = new GlobalConfig.Plmn();
+                gp.setMcc(ap.getMcc());
+                gp.setMnc(ap.getMnc());
+                result.add(gp);
+            }
+        }
+        return result;
     }
 
     private Map<String, Object> buildSbiSection() {

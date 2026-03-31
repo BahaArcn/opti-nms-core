@@ -88,13 +88,16 @@ public class SmfYamlRenderer {
         // session: UE IP havuzları (from GlobalConfig.ueIpPoolList via tunInterface lookup)
         smfSection.put("session", buildSessionList(smf, global));
 
-        // dns: UE'ye advertise edilen DNS sunucuları
-        // LLD Tablo 4: Dns → smf.yaml
-        smfSection.put("dns", smf.getDnsIps());
+        // dns: SMF override > Global fallback
+        List<String> effectiveDns = smf.getSmfDnsIps() != null && !smf.getSmfDnsIps().isEmpty()
+                ? smf.getSmfDnsIps() : global.getDnsIps();
+        if (effectiveDns != null && !effectiveDns.isEmpty()) {
+            smfSection.put("dns", effectiveDns);
+        }
 
-        // mtu: UE'ye advertise edilen MTU
-        // LLD Tablo 4: Mtu → smf.yaml
-        smfSection.put("mtu", smf.getMtu());
+        // mtu: SMF override > Global fallback
+        int effectiveMtu = smf.getSmfMtu() != null ? smf.getSmfMtu() : global.getMtu();
+        smfSection.put("mtu", effectiveMtu);
 
         // ctf: charging — Open5GS default
         Map<String, Object> ctf = new LinkedHashMap<>();

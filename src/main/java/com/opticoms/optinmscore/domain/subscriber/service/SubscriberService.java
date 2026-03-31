@@ -1,5 +1,7 @@
 package com.opticoms.optinmscore.domain.subscriber.service;
 
+import com.opticoms.optinmscore.domain.apn.model.ApnProfile;
+import com.opticoms.optinmscore.domain.apn.repository.ApnProfileRepository;
 import com.opticoms.optinmscore.domain.audit.aspect.Audited;
 import com.opticoms.optinmscore.domain.audit.model.AuditLog.AuditAction;
 import com.opticoms.optinmscore.domain.inventory.model.ConnectedUe;
@@ -38,6 +40,7 @@ public class SubscriberService {
     private final ConnectedUeRepository connectedUeRepository;
     private final PolicyService policyService;
     private final LicenseService licenseService;
+    private final ApnProfileRepository apnProfileRepository;
 
     private static final Pattern HEX_PATTERN = Pattern.compile("^[0-9a-fA-F]+$");
 
@@ -54,6 +57,7 @@ public class SubscriberService {
 
         validateKeys(subscriber);
         validatePolicyReference(tenantId, subscriber);
+        enrichProfilesFromApn(tenantId, subscriber);
         subscriber.setTenantId(tenantId);
 
         String open5gsUri = resolveOpen5gsUri(tenantId);
@@ -100,6 +104,7 @@ public class SubscriberService {
 
         validateKeys(updatedData);
         validatePolicyReference(tenantId, updatedData);
+        enrichProfilesFromApn(tenantId, updatedData);
 
         String open5gsUri = resolveOpen5gsUri(tenantId);
         provisionToOpen5gs(updatedData, open5gsUri);
@@ -249,6 +254,67 @@ public class SubscriberService {
             log.error("Failed to provision subscriber to Open5GS: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Failed to provision subscriber to Open5GS core: " + e.getMessage());
+        }
+    }
+
+    /**
+     * For each SessionProfile in the subscriber, if only apnDnn is provided,
+     * look up the matching ApnProfile and fill in sst, sd, QoS, AMBR, pduType
+     * automatically so the user doesn't have to enter them manually.
+     */
+    private void enrichProfilesFromApn(String tenantId, Subscriber subscriber) {
+        if (subscriber.getProfileList() == null) {
+            return;
+        }
+        for (Subscriber.SessionProfile profile : subscriber.getProfileList()) {
+            if (profile.getApnDnn() == null || profile.getApnDnn().isBlank()) {
+                continue;
+            }
+            var apnOpt = apnProfileRepository.findFirstByTenantIdAndDnnAndEnabledTrue(
+                    tenantId, profile.getApnDnn());
+            if (apnOpt.isEmpty()) {
+                continue;
+            }
+            ApnProfile apn = apnOpt.get();
+
+            if (profile.getSst() == 0) {
+                profile.setSst(apn.getSst());
+            }
+            if (profile.getSd() == null || "FFFFFF".equalsIgnoreCase(profile.getSd())) {
+                if (apn.getSd() != null && !apn.getSd().isBlank()) {
+                    profile.setSd(apn.getSd());
+                }
+            }
+            if (profile.getQi5g() == 0 && apn.getQos() != null && apn.getQos().getFiveQi() != null) {
+                profile.setQi5g(apn.getQos().getFiveQi());
+            }
+            if (profile.getQci4g() == 0 && apn.getQos() != null && apn.getQos().getFiveQi() != null) {
+                profile.setQci4g(apn.getQos().getFiveQi());
+            }
+            if (profile.getArpPriority() == 0 && apn.getQos() != null && apn.getQos().getArpPriorityLevel() != null) {
+                profile.setArpPriority(apn.getQos().getArpPriorityLevel());
+            }
+            if (apn.getQos() != null) {
+                if (apn.getQos().getPreEmptionCapability() == ApnProfile.PreEmption.PRE_EMPT) {
+                    profile.setPreemptionCapability(true);
+                }
+                if (apn.getQos().getPreEmptionVulnerability() == ApnProfile.PreEmption.PRE_EMPTABLE) {
+                    profile.setPreemptionVulnerability(true);
+                }
+            }
+            if (profile.getPduType() == 0 && apn.getPduSessionType() != null) {
+                profile.setPduType(switch (apn.getPduSessionType()) {
+                    case IPV4 -> 1;
+                    case IPV6 -> 2;
+                    case IPV4V6 -> 3;
+                });
+            }
+            if (profile.getSessionAmbrDl() == 0 && apn.getSessionAmbr() != null && apn.getSessionAmbr().getDownlinkKbps() != null) {
+                profile.setSessionAmbrDl(apn.getSessionAmbr().getDownlinkKbps() * 1000);
+            }
+            if (profile.getSessionAmbrUl() == 0 && apn.getSessionAmbr() != null && apn.getSessionAmbr().getUplinkKbps() != null) {
+                profile.setSessionAmbrUl(apn.getSessionAmbr().getUplinkKbps() * 1000);
+            }
         }
     }
 

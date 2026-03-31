@@ -41,6 +41,7 @@ public class TenantController {
         tenant.setAmfUrl(request.getAmfUrl());
         tenant.setSmfUrl(request.getSmfUrl());
         tenant.setOpen5gsMongoUri(request.getOpen5gsMongoUri());
+        tenant.setUpfMetricsUrl(request.getUpfMetricsUrl());
         Tenant saved = tenantService.createTenant(tenant);
 
         User admin;
@@ -127,6 +128,7 @@ public class TenantController {
         private String adminPassword;
 
         private String open5gsMongoUri;
+        private String upfMetricsUrl;
     }
 
     @Data

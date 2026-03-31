@@ -56,14 +56,14 @@ class SmfConfigServiceTest {
         when(smfConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         SmfConfig newConfig = buildSmfConfig();
-        newConfig.setMtu(1500);
+        newConfig.setSmfMtu(1500);
         SmfConfig result = service.saveOrUpdateSmfConfig(TENANT, newConfig);
 
         assertEquals("existing-id", result.getId());
         assertEquals(2L, result.getVersion());
         assertEquals(createdAt, result.getCreatedAt());
         assertEquals("admin", result.getCreatedBy());
-        assertEquals(1500, result.getMtu());
+        assertEquals(1500, result.getSmfMtu());
     }
 
     @Test
@@ -77,6 +77,35 @@ class SmfConfigServiceTest {
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                 () -> service.saveOrUpdateSmfConfig(TENANT, config));
         assertTrue(ex.getReason().contains("nonexistent"));
+    }
+
+    @Test
+    void saveOrUpdateSmfConfig_only5gMode_nullSecurityIndication_throws() {
+        when(globalConfigRepository.findByTenantId(TENANT)).thenReturn(Optional.of(buildGlobalConfig()));
+
+        SmfConfig config = buildSmfConfig();
+        config.setSecurityIndication(null);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> service.saveOrUpdateSmfConfig(TENANT, config));
+        assertEquals(400, ex.getStatusCode().value());
+        assertTrue(ex.getReason().contains("securityIndication"));
+    }
+
+    @Test
+    void saveOrUpdateSmfConfig_only4gMode_nullSecurityIndication_ok() {
+        GlobalConfig global4g = buildGlobalConfig();
+        global4g.setNetworkMode(GlobalConfig.NetworkMode.ONLY_4G);
+        when(globalConfigRepository.findByTenantId(TENANT)).thenReturn(Optional.of(global4g));
+        when(smfConfigRepository.findByTenantId(TENANT)).thenReturn(Optional.empty());
+        when(smfConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        SmfConfig config = buildSmfConfig();
+        config.setSecurityIndication(null);
+
+        SmfConfig result = service.saveOrUpdateSmfConfig(TENANT, config);
+        assertNotNull(result);
+        assertNull(result.getSecurityIndication());
     }
 
     @Test
@@ -100,8 +129,8 @@ class SmfConfigServiceTest {
 
     private SmfConfig buildSmfConfig() {
         SmfConfig c = new SmfConfig();
-        c.setMtu(1400);
-        c.setDnsIps(List.of("8.8.8.8", "8.8.4.4"));
+        c.setSmfMtu(1400);
+        c.setSmfDnsIps(List.of("8.8.8.8", "8.8.4.4"));
 
         SmfConfig.SecurityIndication si = new SmfConfig.SecurityIndication();
         si.setIntegrity(SmfConfig.RequirementLevel.NOT_NEEDED);

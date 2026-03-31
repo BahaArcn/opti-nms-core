@@ -83,15 +83,13 @@ public class AmfYamlRenderer {
 
         // guami: AMF'in kimliği (PLMN + AMF-ID)
         // LLD Tablo 5: Amf-Id (region/set/pointer) → amf.yaml
-        amfSection.put("guami", buildGuamiList(amf));
+        amfSection.put("guami", buildGuamiList(global, amf));
 
-        // tai: Tracking Area Identity listesi
-        // LLD Tablo 4 (common 4G&5G): Tai-List → 5G: amf.yaml, nrf.yaml, pcf.yaml, scp.yaml
-        amfSection.put("tai", buildTaiList(amf));
+        // tai: Global TAI list > AMF override
+        amfSection.put("tai", buildTaiList(global, amf));
 
-        // plmn_support: Desteklenen PLMN'ler ve slice'lar
-        // LLD Tablo 5: Slice-List → amf.yaml, nssf.yaml, smf.yaml
-        amfSection.put("plmn_support", buildPlmnSupportList(amf));
+        // plmn_support: Global PLMN > AMF override, with AMF slices
+        amfSection.put("plmn_support", buildPlmnSupportList(global, amf));
 
         // security: 5G bütünlük ve şifreleme algoritmaları sırası
         // LLD Tablo 5: Sec-Order-5g → amf.yaml
@@ -166,11 +164,9 @@ public class AmfYamlRenderer {
         return metrics;
     }
 
-    private List<Map<String, Object>> buildGuamiList(AmfConfig amf) {
-        // GUAMI = PLMN-ID + AMF-ID (region + set)
-        // Her desteklenen PLMN için bir GUAMI entry üretiyoruz
+    private List<Map<String, Object>> buildGuamiList(GlobalConfig global, AmfConfig amf) {
         List<Map<String, Object>> guamiList = new ArrayList<>();
-        for (AmfConfig.Plmn plmn : amf.getSupportedPlmns()) {
+        for (AmfConfig.Plmn plmn : resolveAmfPlmns(global, amf)) {
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("plmn_id", plmnToMap(plmn));
 
@@ -185,37 +181,68 @@ public class AmfYamlRenderer {
         return guamiList;
     }
 
-    private List<Map<String, Object>> buildTaiList(AmfConfig amf) {
-        // TAI: her TAI entry → plmn_id + tac
+    private List<Map<String, Object>> buildTaiList(GlobalConfig global, AmfConfig amf) {
         List<Map<String, Object>> taiList = new ArrayList<>();
-        for (AmfConfig.Tai tai : amf.getSupportedTais()) {
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("plmn_id", plmnToMap(tai.getPlmn()));
-            entry.put("tac", tai.getTac());
-            taiList.add(entry);
+
+        if (amf.getSupportedTais() != null && !amf.getSupportedTais().isEmpty()) {
+            for (AmfConfig.Tai tai : amf.getSupportedTais()) {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("plmn_id", plmnToMap(tai.getPlmn()));
+                entry.put("tac", tai.getTac());
+                taiList.add(entry);
+            }
+        } else if (global.getTaiList() != null) {
+            for (GlobalConfig.Tai tai : global.getTaiList()) {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("plmn_id", globalPlmnToMap(tai.getPlmn()));
+                entry.put("tac", tai.getTac());
+                taiList.add(entry);
+            }
         }
         return taiList;
     }
 
-    private List<Map<String, Object>> buildPlmnSupportList(AmfConfig amf) {
-        // plmn_support: her PLMN için desteklenen slice'lar (s_nssai)
+    private List<Map<String, Object>> buildPlmnSupportList(GlobalConfig global, AmfConfig amf) {
         List<Map<String, Object>> plmnSupportList = new ArrayList<>();
-        for (AmfConfig.Plmn plmn : amf.getSupportedPlmns()) {
+        for (AmfConfig.Plmn plmn : resolveAmfPlmns(global, amf)) {
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("plmn_id", plmnToMap(plmn));
 
             List<Map<String, Object>> sNssaiList = new ArrayList<>();
-            for (AmfConfig.Slice slice : amf.getSupportedSlices()) {
-                Map<String, Object> nssai = new LinkedHashMap<>();
-                nssai.put("sst", slice.getSst());
-                // SD null veya FFFFFF ise "ffffff" yaz (Open5GS convention)
-                nssai.put("sd", normalizeSd(slice.getSd()));
-                sNssaiList.add(nssai);
+            if (amf.getSupportedSlices() != null) {
+                for (AmfConfig.Slice slice : amf.getSupportedSlices()) {
+                    Map<String, Object> nssai = new LinkedHashMap<>();
+                    nssai.put("sst", slice.getSst());
+                    nssai.put("sd", normalizeSd(slice.getSd()));
+                    sNssaiList.add(nssai);
+                }
             }
             entry.put("s_nssai", sNssaiList);
             plmnSupportList.add(entry);
         }
         return plmnSupportList;
+    }
+
+    /**
+     * AMF supportedPlmns set → use it. Otherwise derive from Global taiList PLMNs.
+     */
+    private List<AmfConfig.Plmn> resolveAmfPlmns(GlobalConfig global, AmfConfig amf) {
+        if (amf.getSupportedPlmns() != null && !amf.getSupportedPlmns().isEmpty()) {
+            return amf.getSupportedPlmns();
+        }
+        List<AmfConfig.Plmn> derived = new ArrayList<>();
+        if (global.getTaiList() != null) {
+            for (GlobalConfig.Tai tai : global.getTaiList()) {
+                AmfConfig.Plmn p = new AmfConfig.Plmn();
+                p.setMcc(tai.getPlmn().getMcc());
+                p.setMnc(tai.getPlmn().getMnc());
+                if (derived.stream().noneMatch(d ->
+                        d.getMcc().equals(p.getMcc()) && d.getMnc().equals(p.getMnc()))) {
+                    derived.add(p);
+                }
+            }
+        }
+        return derived;
     }
 
     private Map<String, Object> buildSecuritySection(AmfConfig amf) {
@@ -257,7 +284,13 @@ public class AmfYamlRenderer {
 
     private Map<String, Object> plmnToMap(AmfConfig.Plmn plmn) {
         Map<String, Object> map = new LinkedHashMap<>();
-        // Open5GS YAML'da mcc/mnc integer — string değil
+        map.put("mcc", Integer.parseInt(plmn.getMcc()));
+        map.put("mnc", Integer.parseInt(plmn.getMnc()));
+        return map;
+    }
+
+    private Map<String, Object> globalPlmnToMap(GlobalConfig.Plmn plmn) {
+        Map<String, Object> map = new LinkedHashMap<>();
         map.put("mcc", Integer.parseInt(plmn.getMcc()));
         map.put("mnc", Integer.parseInt(plmn.getMnc()));
         return map;

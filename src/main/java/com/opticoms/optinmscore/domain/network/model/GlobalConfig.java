@@ -42,6 +42,20 @@ public class GlobalConfig extends BaseEntity {
     @Schema(description = "Master instance address (IPv4/IPv6/domain) when workAsMaster=false")
     private String masterAddr;
 
+    // --- Network-wide TAI (PLMN + TAC) ---
+    @Valid
+    @Schema(description = "Network-wide TAI list. Each entry defines a PLMN and TAC served by this network.")
+    private List<Tai> taiList;
+
+    // --- MTU ---
+    @Min(1280) @Max(1500)
+    @Schema(description = "Network-wide MTU value advertised to UEs", example = "1400")
+    private int mtu = 1400;
+
+    // --- DNS ---
+    @Schema(description = "Network-wide DNS server IPs advertised to UEs", example = "[\"8.8.8.8\", \"8.8.4.4\"]")
+    private List<String> dnsIps;
+
     @Valid
     @Schema(description = "Centralized UE IP pool list. Each DNN references a pool by tunInterface name.")
     private List<UeIpPool> ueIpPoolList;
@@ -91,6 +105,25 @@ public class GlobalConfig extends BaseEntity {
         @Pattern(regexp = "^([0-9]{1,3}\\.){3}[0-9]{1,3}$",
                 message = "Must be a valid IPv4 address")
         private String gatewayIp;
+    }
+
+    @Data
+    public static class Plmn {
+        @Pattern(regexp = "\\d{3}", message = "MCC must be 3 digits")
+        private String mcc;
+
+        @Pattern(regexp = "\\d{2,3}", message = "MNC must be 2 or 3 digits")
+        private String mnc;
+    }
+
+    @Data
+    public static class Tai {
+        @Valid
+        @NotNull
+        private Plmn plmn;
+
+        @Min(1) @Max(65533)
+        private int tac;
     }
 
     public enum NetworkMode {
