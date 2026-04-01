@@ -66,6 +66,15 @@ public class PmController {
         return ResponseEntity.ok(pmService.getCurrentThroughput(tenantId));
     }
 
+    @Operation(summary = "Get time-bucketed traffic series for chart rendering (rx/tx byte deltas per bucket)")
+    @GetMapping("/traffic-series")
+    public ResponseEntity<PmService.TrafficSeriesResponse> getTrafficSeries(
+            HttpServletRequest request,
+            @RequestParam(defaultValue = "24h") String range) {
+        String tenantId = TenantContext.getCurrentTenantId(request);
+        return ResponseEntity.ok(pmService.getTrafficSeries(tenantId, range));
+    }
+
     @Operation(summary = "Get estimated traffic for a specific gNB")
     @GetMapping("/gnb-traffic")
     public ResponseEntity<PmService.GnbTrafficResult> getGnbTraffic(

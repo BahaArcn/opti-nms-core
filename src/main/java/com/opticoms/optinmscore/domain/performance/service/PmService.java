@@ -6,11 +6,13 @@ import com.opticoms.optinmscore.domain.performance.model.PmMetric;
 import com.opticoms.optinmscore.domain.performance.repository.PmMetricRepository;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.bson.Document;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -18,6 +20,15 @@ public class PmService {
 
     private final PmMetricRepository pmMetricRepository;
     private final ConnectedUeRepository connectedUeRepository;
+    private final MongoTemplate mongoTemplate;
+
+    private static final Map<String, int[]> RANGE_MAP = Map.of(
+            "5m",  new int[]{5, 1},
+            "1h",  new int[]{60, 5},
+            "24h", new int[]{1440, 60},
+            "3d",  new int[]{4320, 480},
+            "7d",  new int[]{10080, 720}
+    );
 
     public PmMetric ingestMetric(String tenantId, PmMetric metric) {
         metric.setTenantId(tenantId);
@@ -117,6 +128,84 @@ public class PmService {
         return result;
     }
 
+    public TrafficSeriesResponse getTrafficSeries(String tenantId, String range) {
+        int[] params = RANGE_MAP.get(range);
+        if (params == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Invalid range. Allowed: " + RANGE_MAP.keySet());
+        }
+        int totalMinutes = params[0];
+        int bucketMinutes = params[1];
+        long bucketMs = (long) bucketMinutes * 60 * 1000;
+        long endTime = System.currentTimeMillis();
+        long startTime = endTime - ((long) totalMinutes * 60 * 1000);
+
+        Map<Long, double[]> rxBuckets = runBucketAggregation(tenantId, "upf_rx_bytes", startTime, endTime, bucketMs);
+        Map<Long, double[]> txBuckets = runBucketAggregation(tenantId, "upf_tx_bytes", startTime, endTime, bucketMs);
+
+        Set<Long> allTimestamps = new TreeSet<>();
+        allTimestamps.addAll(rxBuckets.keySet());
+        allTimestamps.addAll(txBuckets.keySet());
+
+        List<TrafficDataPoint> dataPoints = new ArrayList<>();
+        for (Long ts : allTimestamps) {
+            TrafficDataPoint dp = new TrafficDataPoint();
+            dp.setTimestamp(ts);
+            double[] rx = rxBuckets.getOrDefault(ts, new double[]{0, 0});
+            double[] tx = txBuckets.getOrDefault(ts, new double[]{0, 0});
+            dp.setRxBytes(Math.max(rx[1] - rx[0], 0));
+            dp.setTxBytes(Math.max(tx[1] - tx[0], 0));
+            dataPoints.add(dp);
+        }
+
+        TrafficSeriesResponse response = new TrafficSeriesResponse();
+        response.setRange(range);
+        response.setBucketMinutes(bucketMinutes);
+        response.setDataPoints(dataPoints);
+        return response;
+    }
+
+    /**
+     * MongoDB aggregation: group metric values into time buckets.
+     * Returns map of bucketTimestamp -> [firstValue, lastValue].
+     */
+    private Map<Long, double[]> runBucketAggregation(String tenantId, String metricName,
+                                                      long startTime, long endTime, long bucketMs) {
+        Document matchStage = new Document("$match", new Document()
+                .append("tenantId", tenantId)
+                .append("metricName", metricName)
+                .append("timestamp", new Document("$gte", startTime).append("$lte", endTime)));
+
+        Document sortAscStage = new Document("$sort", new Document("timestamp", 1));
+
+        Document bucketExpr = new Document("$multiply", List.of(
+                new Document("$floor", new Document("$divide", List.of("$timestamp", bucketMs))),
+                bucketMs));
+
+        Document groupStage = new Document("$group", new Document()
+                .append("_id", bucketExpr)
+                .append("firstValue", new Document("$first", "$value"))
+                .append("lastValue", new Document("$last", "$value")));
+
+        Document sortBucketStage = new Document("$sort", new Document("_id", 1));
+
+        List<Document> pipeline = List.of(matchStage, sortAscStage, groupStage, sortBucketStage);
+
+        List<Document> results = mongoTemplate.getDb()
+                .getCollection("pm_metrics")
+                .aggregate(pipeline)
+                .into(new ArrayList<>());
+
+        Map<Long, double[]> buckets = new LinkedHashMap<>();
+        for (Document doc : results) {
+            long bucketTs = ((Number) doc.get("_id")).longValue();
+            double first = ((Number) doc.get("firstValue")).doubleValue();
+            double last = ((Number) doc.get("lastValue")).doubleValue();
+            buckets.put(bucketTs, new double[]{first, last});
+        }
+        return buckets;
+    }
+
     private double computeDelta(List<PmMetric> metrics) {
         if (metrics == null || metrics.size() < 2) {
             return 0.0;
@@ -153,5 +242,19 @@ public class PmService {
         private double estimatedDataGB;
         private long connectedUeCount;
         private long totalNetworkUeCount;
+    }
+
+    @Data
+    public static class TrafficDataPoint {
+        private long timestamp;
+        private double rxBytes;
+        private double txBytes;
+    }
+
+    @Data
+    public static class TrafficSeriesResponse {
+        private String range;
+        private int bucketMinutes;
+        private List<TrafficDataPoint> dataPoints;
     }
 }
