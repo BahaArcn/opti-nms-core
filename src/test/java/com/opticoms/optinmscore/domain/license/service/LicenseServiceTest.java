@@ -163,4 +163,60 @@ class LicenseServiceTest {
                 () -> service.getLicense(TENANT));
         assertEquals(404, ex.getStatusCode().value());
     }
+
+    // --- getRemainingSubscriberQuota tests ---
+
+    @Test
+    void getRemainingQuota_noLicense_returnsMaxValue() {
+        when(licenseRepository.findByTenantId(TENANT)).thenReturn(Optional.empty());
+        assertEquals(Integer.MAX_VALUE, service.getRemainingSubscriberQuota(TENANT));
+    }
+
+    @Test
+    void getRemainingQuota_withinLimit_returnsRemaining() {
+        when(licenseRepository.findByTenantId(TENANT)).thenReturn(Optional.of(license));
+        when(subscriberRepository.countByTenantId(TENANT)).thenReturn(60L);
+
+        assertEquals(40, service.getRemainingSubscriberQuota(TENANT));
+    }
+
+    @Test
+    void getRemainingQuota_atLimit_returnsZero() {
+        when(licenseRepository.findByTenantId(TENANT)).thenReturn(Optional.of(license));
+        when(subscriberRepository.countByTenantId(TENANT)).thenReturn(100L);
+
+        assertEquals(0, service.getRemainingSubscriberQuota(TENANT));
+    }
+
+    @Test
+    void getRemainingQuota_overLimit_returnsZero() {
+        when(licenseRepository.findByTenantId(TENANT)).thenReturn(Optional.of(license));
+        when(subscriberRepository.countByTenantId(TENANT)).thenReturn(150L);
+
+        assertEquals(0, service.getRemainingSubscriberQuota(TENANT));
+    }
+
+    @Test
+    void getRemainingQuota_inactive_returnsZero() {
+        license.setActive(false);
+        when(licenseRepository.findByTenantId(TENANT)).thenReturn(Optional.of(license));
+
+        assertEquals(0, service.getRemainingSubscriberQuota(TENANT));
+    }
+
+    @Test
+    void getRemainingQuota_expired_returnsMaxValue() {
+        license.setExpiresAt(System.currentTimeMillis() - 1000);
+        when(licenseRepository.findByTenantId(TENANT)).thenReturn(Optional.of(license));
+
+        assertEquals(Integer.MAX_VALUE, service.getRemainingSubscriberQuota(TENANT));
+    }
+
+    @Test
+    void getRemainingQuota_nullLimit_returnsMaxValue() {
+        license.setMaxSubscribers(null);
+        when(licenseRepository.findByTenantId(TENANT)).thenReturn(Optional.of(license));
+
+        assertEquals(Integer.MAX_VALUE, service.getRemainingSubscriberQuota(TENANT));
+    }
 }

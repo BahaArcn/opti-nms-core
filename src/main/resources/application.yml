@@ -12,6 +12,14 @@ spring:
       auto-index-creation: true # Development için true, Production'da false olmalı
 
   # ============================================
+  # MULTIPART FILE UPLOAD
+  # ============================================
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+  # ============================================
   # JACKSON JSON CONFIGURATION
   # ============================================
   jackson:

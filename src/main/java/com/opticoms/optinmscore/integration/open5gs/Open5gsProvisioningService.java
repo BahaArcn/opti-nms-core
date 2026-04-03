@@ -1,16 +1,25 @@
 package com.opticoms.optinmscore.integration.open5gs;
 
+import com.mongodb.MongoBulkWriteException;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.InsertManyOptions;
+import com.mongodb.client.model.Projections;
+import com.mongodb.client.model.ReplaceOneModel;
+import com.mongodb.client.model.WriteModel;
 import com.opticoms.optinmscore.domain.subscriber.model.Subscriber;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.Document;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Provisions subscribers into the Open5GS MongoDB database.
@@ -67,6 +76,95 @@ public class Open5gsProvisioningService {
         MongoCollection<Document> collection = db.getCollection(SUBSCRIBERS_COLLECTION);
         long deleted = collection.deleteMany(Filters.eq("imsi", imsi)).getDeletedCount();
         log.info("Deleted subscriber {} from Open5GS (count: {})", imsi, deleted);
+    }
+
+    /**
+     * Bulk-provisions subscribers to Open5GS MongoDB.
+     * Uses find($in) + insertMany(ordered=false) + bulkWrite(replaceOne) to minimize round-trips.
+     * 1000 subscribers = ~3 MongoDB operations instead of 2000.
+     */
+    public BulkProvisionResult provisionSubscribersBulk(List<Subscriber> subscribers, String open5gsMongoUri) {
+        if (open5gsMongoUri == null || open5gsMongoUri.isBlank()) {
+            log.warn("Skipping Open5GS bulk provisioning -- no open5gsMongoUri configured");
+            return new BulkProvisionResult(0, 0, subscribers.size(), List.of());
+        }
+
+        MongoDatabase db = open5gsMongoConfig.getDatabase(open5gsMongoUri);
+        MongoCollection<Document> collection = db.getCollection(SUBSCRIBERS_COLLECTION);
+
+        List<String> allImsis = subscribers.stream()
+                .map(Subscriber::getImsi)
+                .toList();
+
+        Set<String> existingImsis = new HashSet<>();
+        collection.find(Filters.in("imsi", allImsis))
+                .projection(Projections.include("imsi"))
+                .forEach(doc -> existingImsis.add(doc.getString("imsi")));
+
+        List<Document> toInsert = new ArrayList<>();
+        List<WriteModel<Document>> toUpdate = new ArrayList<>();
+        List<String> failedImsis = new ArrayList<>();
+
+        for (Subscriber sub : subscribers) {
+            try {
+                Document doc = toOpen5gsDocument(sub);
+                if (existingImsis.contains(sub.getImsi())) {
+                    toUpdate.add(new ReplaceOneModel<>(
+                            Filters.eq("imsi", sub.getImsi()), doc));
+                } else {
+                    toInsert.add(doc);
+                }
+            } catch (Exception e) {
+                log.error("Failed to build Open5GS document for IMSI {}: {}", sub.getImsi(), e.getMessage());
+                failedImsis.add(sub.getImsi());
+            }
+        }
+
+        int inserted = 0;
+        int updated = 0;
+
+        if (!toInsert.isEmpty()) {
+            try {
+                collection.insertMany(toInsert, new InsertManyOptions().ordered(false));
+                inserted = toInsert.size();
+            } catch (MongoBulkWriteException e) {
+                inserted = toInsert.size() - e.getWriteErrors().size();
+                e.getWriteErrors().forEach(err ->
+                        failedImsis.add(toInsert.get(err.getIndex()).getString("imsi")));
+                log.warn("Open5GS insertMany partial failure: {} of {} failed",
+                        e.getWriteErrors().size(), toInsert.size());
+            } catch (Exception e) {
+                log.error("Open5GS insertMany failed entirely: {}", e.getMessage());
+                toInsert.forEach(doc -> failedImsis.add(doc.getString("imsi")));
+            }
+        }
+
+        if (!toUpdate.isEmpty()) {
+            try {
+                collection.bulkWrite(toUpdate);
+                updated = toUpdate.size();
+            } catch (MongoBulkWriteException e) {
+                updated = toUpdate.size() - e.getWriteErrors().size();
+                log.warn("Open5GS bulkWrite partial failure: {} of {} failed",
+                        e.getWriteErrors().size(), toUpdate.size());
+            } catch (Exception e) {
+                log.error("Open5GS bulkWrite failed entirely: {}", e.getMessage());
+            }
+        }
+
+        log.info("Open5GS bulk provisioning complete: inserted={}, updated={}, failed={}",
+                inserted, updated, failedImsis.size());
+
+        return new BulkProvisionResult(inserted, updated, failedImsis.size(), failedImsis);
+    }
+
+    @Data
+    @AllArgsConstructor
+    public static class BulkProvisionResult {
+        private int inserted;
+        private int updated;
+        private int skipped;
+        private List<String> failedImsis;
     }
 
     public boolean subscriberExists(String imsi, String open5gsMongoUri) {

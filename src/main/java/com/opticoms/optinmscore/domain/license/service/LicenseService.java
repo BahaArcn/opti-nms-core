@@ -73,6 +73,42 @@ public class LicenseService {
                 lic -> lic.getMaxSubscribers());
     }
 
+    /**
+     * Returns the number of additional subscribers this tenant can add.
+     * <p>
+     * NOTE: This check is not atomic. Two concurrent bulk imports could both
+     * read the same remaining quota and collectively exceed the limit.
+     * Acceptable for current single-tenant deployment. For multi-tenant,
+     * consider MongoDB atomic counter or distributed locking.
+     *
+     * @return remaining quota, or {@link Integer#MAX_VALUE} if unlimited
+     */
+    public int getRemainingSubscriberQuota(String tenantId) {
+        Optional<License> optLicense = licenseRepository.findByTenantId(tenantId);
+
+        if (optLicense.isEmpty()) {
+            return Integer.MAX_VALUE;
+        }
+
+        License license = optLicense.get();
+
+        if (!license.isActive()) {
+            return 0;
+        }
+
+        if (license.getExpiresAt() != null && license.getExpiresAt() < System.currentTimeMillis()) {
+            return Integer.MAX_VALUE;
+        }
+
+        Integer limit = license.getMaxSubscribers();
+        if (limit == null) {
+            return Integer.MAX_VALUE;
+        }
+
+        long currentCount = subscriberRepository.countByTenantId(tenantId);
+        return Math.max(0, (int) (limit - currentCount));
+    }
+
     public void checkCanAddDnn(String tenantId) {
         checkLicenseLimit(tenantId, "DNN profiles",
                 apnProfileRepository.countByTenantId(tenantId),

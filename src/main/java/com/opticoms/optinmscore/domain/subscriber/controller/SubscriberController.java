@@ -1,5 +1,7 @@
 package com.opticoms.optinmscore.domain.subscriber.controller;
 
+import com.opticoms.optinmscore.domain.subscriber.importer.SubscriberImportParser;
+import com.opticoms.optinmscore.domain.subscriber.model.BulkImportResult;
 import com.opticoms.optinmscore.domain.subscriber.model.Subscriber;
 import com.opticoms.optinmscore.domain.subscriber.service.SubscriberService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,9 +14,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -23,6 +29,44 @@ import java.util.List;
 public class SubscriberController {
 
     private final SubscriberService subscriberService;
+    private final List<SubscriberImportParser> parsers;
+
+    @Operation(summary = "Bulk import subscribers from Excel (.xlsx), JSON, or CSV file")
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<BulkImportResult> importSubscribers(
+            HttpServletRequest request,
+            @RequestParam("file") MultipartFile file) {
+
+        if (file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File is empty");
+        }
+
+        String tenantId = TenantContext.getCurrentTenantId(request);
+        String filename = file.getOriginalFilename();
+        String contentType = file.getContentType();
+
+        SubscriberImportParser parser = parsers.stream()
+                .filter(p -> p.supports(contentType, filename))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Unsupported file format. Use .xlsx, .json, or .csv"));
+
+        try {
+            List<Subscriber> parsed = parser.parse(file.getInputStream());
+
+            if (parsed.isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "File contains no subscriber records");
+            }
+
+            BulkImportResult result = subscriberService.bulkImport(tenantId, parsed);
+            return ResponseEntity.ok(result);
+
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Failed to parse file: " + e.getMessage());
+        }
+    }
 
     @Operation(summary = "Create a new subscriber and provision to Open5GS")
     @PostMapping

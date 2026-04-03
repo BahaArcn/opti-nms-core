@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,4 +26,6 @@ public interface SubscriberRepository extends MongoRepository<Subscriber, String
     Page<Subscriber> findByTenantIdAndLabelContainingIgnoreCase(String tenantId, String label, Pageable pageable);
 
     Optional<Subscriber> findByMsisdnHashAndTenantId(String msisdnHash, String tenantId);
+
+    List<Subscriber> findByTenantIdAndImsiHashIn(String tenantId, Collection<String> imsiHashes);
 }

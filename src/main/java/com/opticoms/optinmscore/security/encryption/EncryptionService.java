@@ -23,6 +23,7 @@ public class EncryptionService {
     private String masterKeyString;
 
     private SecretKey secretKey; // İşlenmiş, güvenli anahtar
+    private final SecureRandom secureRandom = new SecureRandom();
 
     private static final String ALGORITHM = "AES/GCM/NoPadding";
     private static final int GCM_IV_LENGTH = 12; // 12 bytes IV (Endüstri standardı)
@@ -46,7 +47,7 @@ public class EncryptionService {
         try {
             // 2. Her işlem için rastgele bir IV (Initialization Vector) oluştur.
             byte[] iv = new byte[GCM_IV_LENGTH];
-            new SecureRandom().nextBytes(iv);
+            secureRandom.nextBytes(iv);
 
             // 3. Şifreleme motorunu GCM modunda başlat
             Cipher cipher = Cipher.getInstance(ALGORITHM);
