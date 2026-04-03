@@ -23,7 +23,13 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) {
         if (!userRepository.existsByUsername("admin")) {
-            String password = defaultAdminPassword != null ? defaultAdminPassword : "admin123";
+            String password;
+            if (defaultAdminPassword != null) {
+                password = defaultAdminPassword;
+            } else {
+                password = java.util.UUID.randomUUID().toString();
+                log.warn("DEFAULT_ADMIN_PASSWORD env var not set. Generated random password: {}", password);
+            }
 
             User admin = new User();
             admin.setUsername("admin");
@@ -36,10 +42,6 @@ public class DataInitializer implements CommandLineRunner {
             userRepository.save(admin);
             log.info("Default admin user created. Change the password immediately via API.");
 
-            if (defaultAdminPassword == null) {
-                log.warn("Using built-in default admin password. "
-                        + "Set DEFAULT_ADMIN_PASSWORD env variable for production.");
-            }
         }
     }
 }

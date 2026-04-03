@@ -31,6 +31,11 @@ public class EncryptionService {
 
     @PostConstruct
     public void init() {
+        if (masterKeyString == null || masterKeyString.isBlank()) {
+            throw new RuntimeException(
+                    "app.security.master-key is not configured. " +
+                    "Application cannot start without a valid encryption key.");
+        }
         try {
             // 1. Gelen anahtarı ne olursa olsun SHA-256 ile 32 byte (256 bit) sabit uzunluğa getiriyoruz.
             // Bu sayede "Key length" hatalarını önleriz.

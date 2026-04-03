@@ -207,6 +207,23 @@ class UserServiceTest {
         assertEquals(403, ex.getStatusCode().value());
     }
 
+    @Test
+    void createUser_withSuperAdminRole_throwsForbidden() {
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> service.createUser(TENANT, "hacker", "hacker@example.com",
+                        "password123", User.Role.SUPER_ADMIN));
+        assertEquals(403, ex.getStatusCode().value());
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void updateUserRole_toSuperAdmin_throwsForbidden() {
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> service.updateUserRole(TENANT, "user-1", User.Role.SUPER_ADMIN));
+        assertEquals(403, ex.getStatusCode().value());
+        verify(userRepository, never()).save(any());
+    }
+
     private User buildUser(String username, String email, User.Role role) {
         User u = new User();
         u.setTenantId(TENANT);

@@ -26,6 +26,10 @@ public class UserService {
     @Audited(action = AuditAction.CREATE, entityType = "User")
     public User createUser(String tenantId, String username, String email,
                            String password, User.Role role) {
+        if (role == User.Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "SUPER_ADMIN role cannot be assigned via tenant user management");
+        }
         validatePassword(password);
 
         if (userRepository.existsByTenantIdAndUsername(tenantId, username)) {
@@ -65,6 +69,10 @@ public class UserService {
 
     @Audited(action = AuditAction.UPDATE, entityType = "User")
     public User updateUserRole(String tenantId, String userId, User.Role newRole) {
+        if (newRole == User.Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "SUPER_ADMIN role cannot be assigned via tenant user management");
+        }
         User user = getUserById(tenantId, userId);
         user.setRole(newRole);
         log.info("Updating role for user {}: {} -> {}", user.getUsername(), user.getRole(), newRole);
