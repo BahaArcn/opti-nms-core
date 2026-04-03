@@ -126,9 +126,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/policies/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/policies/**").hasAnyRole("ADMIN", "OPERATOR")
 
-                        // License management: ADMIN for write, OPERATOR+ for read/status
-                        .requestMatchers(HttpMethod.POST, "/api/v1/licenses/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/licenses/**").hasRole("ADMIN")
+                        // License management: tenant can only read own license status
                         .requestMatchers(HttpMethod.GET, "/api/v1/licenses/**").hasAnyRole("ADMIN", "OPERATOR")
 
                         // Firewall management: ADMIN only (OS-level iptables)
