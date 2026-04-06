@@ -42,7 +42,7 @@ jobs:
       - name: Lint Helm chart
         run: |
           curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-          helm lint opti-nms-core/helm/
+          helm lint helm/
 
       - name: Run tests
         run: mvn test -B
