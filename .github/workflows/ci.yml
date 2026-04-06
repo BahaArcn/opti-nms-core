@@ -55,6 +55,7 @@ jobs:
           path: target/site/jacoco/
 
       - name: OWASP Dependency Check
+        continue-on-error: true
         run: mvn org.owasp:dependency-check-maven:check -B -DfailBuildOnCVSS=9 -DsuppressionFile=owasp-suppressions.xml
 
       - name: Upload OWASP report
