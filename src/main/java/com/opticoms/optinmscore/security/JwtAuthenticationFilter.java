@@ -36,8 +36,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String jwt;
         final String username;
 
-        // 1. KONTROL: Header yoksa veya Bearer ile başlamıyorsa zinciri devam ettir ve ÇIK.
-        // Bu sayede Swagger gibi public sayfalar bu filtreden etkilenmez.
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
@@ -73,7 +71,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             SecurityContextHolder.clearContext();
         }
 
-        // 2. KONTROL: İşlem bittikten sonra zinciri devam ettir.
         filterChain.doFilter(request, response);
     }
 }

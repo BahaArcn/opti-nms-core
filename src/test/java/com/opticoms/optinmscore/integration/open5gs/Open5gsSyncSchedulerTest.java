@@ -9,7 +9,7 @@ import com.opticoms.optinmscore.domain.inventory.repository.PduSessionRepository
 import com.opticoms.optinmscore.domain.observability.service.AlarmService;
 import com.opticoms.optinmscore.domain.performance.service.PmService;
 import com.opticoms.optinmscore.domain.tenant.model.Tenant;
-import com.opticoms.optinmscore.domain.tenant.repository.TenantRepository;
+import com.opticoms.optinmscore.domain.tenant.service.TenantService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,7 +36,7 @@ class Open5gsSyncSchedulerTest {
     @Mock private ConnectedUeRepository connectedUeRepository;
     @Mock private PduSessionRepository pduSessionRepository;
     @Mock private AlarmService alarmService;
-    @Mock private TenantRepository tenantRepository;
+    @Mock private TenantService tenantService;
     @Mock private PmService pmService;
 
     @InjectMocks
@@ -53,9 +53,10 @@ class Open5gsSyncSchedulerTest {
         testTenant.setSmfUrl(SMF_URL);
         testTenant.setActive(true);
 
-        when(tenantRepository.findByActiveTrue()).thenReturn(List.of(testTenant));
+        when(tenantService.getActiveTenants()).thenReturn(List.of(testTenant));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void syncFromOpen5gs_gnbData_savesGnb() {
         Map<String, Object> gnbData = new HashMap<>();
@@ -66,22 +67,22 @@ class Open5gsSyncSchedulerTest {
         when(open5gsClient.fetchGnbInfo(AMF_URL)).thenReturn(List.of(gnbData));
         when(open5gsClient.fetchUeInfo(AMF_URL)).thenReturn(Collections.emptyList());
         when(open5gsClient.fetchPduInfo(SMF_URL)).thenReturn(Collections.emptyList());
-        when(gNodeBRepository.findByTenantIdAndGnbId(TENANT_ID, "000001")).thenReturn(Optional.empty());
         when(gNodeBRepository.findByTenantId(TENANT_ID)).thenReturn(Collections.emptyList());
         when(connectedUeRepository.findByTenantId(TENANT_ID)).thenReturn(Collections.emptyList());
         when(pduSessionRepository.findByTenantId(TENANT_ID)).thenReturn(Collections.emptyList());
 
         scheduler.syncFromOpen5gs();
 
-        ArgumentCaptor<GNodeB> captor = ArgumentCaptor.forClass(GNodeB.class);
-        verify(gNodeBRepository).save(captor.capture());
-        GNodeB saved = captor.getValue();
+        ArgumentCaptor<List<GNodeB>> captor = ArgumentCaptor.forClass(List.class);
+        verify(gNodeBRepository).saveAll(captor.capture());
+        GNodeB saved = captor.getValue().get(0);
         assertEquals("000001", saved.getGnbId());
         assertEquals(TENANT_ID, saved.getTenantId());
         assertEquals(GNodeB.ConnectionStatus.CONNECTED, saved.getStatus());
         assertEquals(5, saved.getConnectedUeCount());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void syncFromOpen5gs_ueData_savesUe() {
         Map<String, Object> ueData = new HashMap<>();
@@ -92,20 +93,19 @@ class Open5gsSyncSchedulerTest {
         when(open5gsClient.fetchUeInfo(AMF_URL)).thenReturn(List.of(ueData));
         when(open5gsClient.fetchPduInfo(SMF_URL)).thenReturn(Collections.emptyList());
         when(gNodeBRepository.findByTenantId(TENANT_ID)).thenReturn(Collections.emptyList());
-        when(connectedUeRepository.findByTenantIdAndImsi(TENANT_ID, "286010000000001"))
-                .thenReturn(Optional.empty());
         when(connectedUeRepository.findByTenantId(TENANT_ID)).thenReturn(Collections.emptyList());
         when(pduSessionRepository.findByTenantId(TENANT_ID)).thenReturn(Collections.emptyList());
 
         scheduler.syncFromOpen5gs();
 
-        ArgumentCaptor<ConnectedUe> captor = ArgumentCaptor.forClass(ConnectedUe.class);
-        verify(connectedUeRepository).save(captor.capture());
-        ConnectedUe saved = captor.getValue();
+        ArgumentCaptor<List<ConnectedUe>> captor = ArgumentCaptor.forClass(List.class);
+        verify(connectedUeRepository).saveAll(captor.capture());
+        ConnectedUe saved = captor.getValue().get(0);
         assertEquals("286010000000001", saved.getImsi());
         assertEquals(ConnectedUe.UeStatus.CONNECTED, saved.getStatus());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void syncFromOpen5gs_ueIdleState() {
         Map<String, Object> ueData = new HashMap<>();
@@ -116,18 +116,17 @@ class Open5gsSyncSchedulerTest {
         when(open5gsClient.fetchUeInfo(AMF_URL)).thenReturn(List.of(ueData));
         when(open5gsClient.fetchPduInfo(SMF_URL)).thenReturn(Collections.emptyList());
         when(gNodeBRepository.findByTenantId(TENANT_ID)).thenReturn(Collections.emptyList());
-        when(connectedUeRepository.findByTenantIdAndImsi(TENANT_ID, "286010000000001"))
-                .thenReturn(Optional.empty());
         when(connectedUeRepository.findByTenantId(TENANT_ID)).thenReturn(Collections.emptyList());
         when(pduSessionRepository.findByTenantId(TENANT_ID)).thenReturn(Collections.emptyList());
 
         scheduler.syncFromOpen5gs();
 
-        ArgumentCaptor<ConnectedUe> captor = ArgumentCaptor.forClass(ConnectedUe.class);
-        verify(connectedUeRepository).save(captor.capture());
-        assertEquals(ConnectedUe.UeStatus.IDLE, captor.getValue().getStatus());
+        ArgumentCaptor<List<ConnectedUe>> captor = ArgumentCaptor.forClass(List.class);
+        verify(connectedUeRepository).saveAll(captor.capture());
+        assertEquals(ConnectedUe.UeStatus.IDLE, captor.getValue().get(0).getStatus());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void syncFromOpen5gs_pduData_savesSession() {
         Map<String, Object> snssai = new HashMap<>();
@@ -150,21 +149,20 @@ class Open5gsSyncSchedulerTest {
         when(open5gsClient.fetchPduInfo(SMF_URL)).thenReturn(List.of(ueEntry));
         when(gNodeBRepository.findByTenantId(TENANT_ID)).thenReturn(Collections.emptyList());
         when(connectedUeRepository.findByTenantId(TENANT_ID)).thenReturn(Collections.emptyList());
-        when(pduSessionRepository.findByTenantIdAndSessionId(eq(TENANT_ID), anyString()))
-                .thenReturn(Optional.empty());
         when(pduSessionRepository.findByTenantId(TENANT_ID)).thenReturn(Collections.emptyList());
 
         scheduler.syncFromOpen5gs();
 
-        ArgumentCaptor<PduSession> captor = ArgumentCaptor.forClass(PduSession.class);
-        verify(pduSessionRepository).save(captor.capture());
-        PduSession saved = captor.getValue();
+        ArgumentCaptor<List<PduSession>> captor = ArgumentCaptor.forClass(List.class);
+        verify(pduSessionRepository).saveAll(captor.capture());
+        PduSession saved = captor.getValue().get(0);
         assertEquals("internet", saved.getDnn());
         assertEquals("10.45.0.2", saved.getUeIpAddress());
         assertEquals(PduSession.SessionStatus.ACTIVE, saved.getStatus());
         assertEquals(1, saved.getSst());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void syncFromOpen5gs_staleGnb_markedDisconnected() {
         GNodeB staleGnb = new GNodeB();
@@ -181,12 +179,14 @@ class Open5gsSyncSchedulerTest {
 
         scheduler.syncFromOpen5gs();
 
-        ArgumentCaptor<GNodeB> captor = ArgumentCaptor.forClass(GNodeB.class);
-        verify(gNodeBRepository).save(captor.capture());
-        assertEquals(GNodeB.ConnectionStatus.DISCONNECTED, captor.getValue().getStatus());
-        assertEquals(0, captor.getValue().getConnectedUeCount());
+        ArgumentCaptor<List<GNodeB>> captor = ArgumentCaptor.forClass(List.class);
+        verify(gNodeBRepository).saveAll(captor.capture());
+        GNodeB saved = captor.getValue().get(0);
+        assertEquals(GNodeB.ConnectionStatus.DISCONNECTED, saved.getStatus());
+        assertEquals(0, saved.getConnectedUeCount());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void syncFromOpen5gs_stalePduSession_markedReleased() {
         PduSession stale = new PduSession();
@@ -203,9 +203,9 @@ class Open5gsSyncSchedulerTest {
 
         scheduler.syncFromOpen5gs();
 
-        ArgumentCaptor<PduSession> captor = ArgumentCaptor.forClass(PduSession.class);
-        verify(pduSessionRepository).save(captor.capture());
-        assertEquals(PduSession.SessionStatus.RELEASED, captor.getValue().getStatus());
+        ArgumentCaptor<List<PduSession>> captor = ArgumentCaptor.forClass(List.class);
+        verify(pduSessionRepository).saveAll(captor.capture());
+        assertEquals(PduSession.SessionStatus.RELEASED, captor.getValue().get(0).getStatus());
     }
 
     @Test
@@ -218,10 +218,12 @@ class Open5gsSyncSchedulerTest {
                 "CONNECTIVITY_FAILURE".equals(alarm.getAlarmType())));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void syncFromOpen5gs_emptyGnbList_marksAllDisconnected() {
         GNodeB connected = new GNodeB();
         connected.setGnbId("gnb-1");
+        connected.setTenantId(TENANT_ID);
         connected.setStatus(GNodeB.ConnectionStatus.CONNECTED);
 
         when(open5gsClient.fetchGnbInfo(AMF_URL)).thenReturn(Collections.emptyList());
@@ -233,13 +235,14 @@ class Open5gsSyncSchedulerTest {
 
         scheduler.syncFromOpen5gs();
 
-        verify(gNodeBRepository).save(argThat(g ->
-                g.getStatus() == GNodeB.ConnectionStatus.DISCONNECTED));
+        ArgumentCaptor<List<GNodeB>> captor = ArgumentCaptor.forClass(List.class);
+        verify(gNodeBRepository).saveAll(captor.capture());
+        assertEquals(GNodeB.ConnectionStatus.DISCONNECTED, captor.getValue().get(0).getStatus());
     }
 
     @Test
     void syncFromOpen5gs_noActiveTenants_skipsSync() {
-        when(tenantRepository.findByActiveTrue()).thenReturn(Collections.emptyList());
+        when(tenantService.getActiveTenants()).thenReturn(Collections.emptyList());
 
         scheduler.syncFromOpen5gs();
 

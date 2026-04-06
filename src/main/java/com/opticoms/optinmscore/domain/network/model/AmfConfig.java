@@ -111,8 +111,6 @@ public class AmfConfig extends BaseEntity {
 
     @Data
     public static class SecurityParameters {
-        // ✅ DÜZELTİLDİ: List.of() yerine new ArrayList<>(List.of())
-        // Artık liste mutable (değiştirilebilir)
 
         private List<String> integrityOrder5g = new ArrayList<>(
                 List.of("NIA2", "NIA1", "NIA0")

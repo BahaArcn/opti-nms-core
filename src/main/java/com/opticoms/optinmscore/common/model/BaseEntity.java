@@ -17,12 +17,12 @@ public abstract class BaseEntity {
      * MongoDB document ID (auto-generated)
      */
     @Id
-    @Schema(accessMode = Schema.AccessMode.READ_ONLY) // <-- İstek örneğinde GİZLENİR
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private String id;
 
     /**
      * Tenant ID for multi-tenant support.
-     * Controller'da Header'dan alındığı için Body'de istenmez.
+     * Taken from the request header in controllers; not expected in the body.
      */
     @Indexed
     @Pattern(regexp = "^[A-Z]{4}-\\d{4}/\\d{4}/\\d{2}$",
@@ -33,30 +33,29 @@ public abstract class BaseEntity {
     private String tenantId;
 
     // ============================================
-    // AUDIT FIELDS (Otomatik Doldurulur -> Read Only)
+    // AUDIT FIELDS (auto-populated, read-only)
     // ============================================
 
     @CreatedDate
-    @Schema(accessMode = Schema.AccessMode.READ_ONLY) // <-- GİZLE
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private Long createdAt;
 
     @LastModifiedDate
-    @Schema(accessMode = Schema.AccessMode.READ_ONLY) // <-- GİZLE
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private Long updatedAt;
 
     @CreatedBy
-    @Schema(accessMode = Schema.AccessMode.READ_ONLY) // <-- GİZLE
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private String createdBy;
 
     @LastModifiedBy
-    @Schema(accessMode = Schema.AccessMode.READ_ONLY) // <-- GİZLE
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private String lastModifiedBy;
 
     /**
-     * Version field for optimistic locking.
-     * Kullanıcı bunu elle set etmez, Spring yönetir.
+     * Version field for optimistic locking (managed by Spring).
      */
     @Version
-    @Schema(accessMode = Schema.AccessMode.READ_ONLY) // <-- GİZLE
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private Long version;
 }

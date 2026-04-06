@@ -39,15 +39,15 @@ public class SmfConfig extends BaseEntity {
     @Schema(description = "IMS Proxy-CSCF IP address for VoLTE", example = "10.0.0.100")
     private String proxyCscfIp;
 
-    // APN/DNN Listesi
+    // APN/DNN list
     @NotEmpty(message = "APN/DNN list cannot be empty")
     private List<@Valid ApnDnn> apnList;
 
     // =========================================
-    // INNER CLASSES & ENUMS (Alt Modeller)
+    // INNER CLASSES & ENUMS
     // =========================================
 
-    // Tablodaki "required, preferred or not-needed" kuralı
+    /** LLD: required / preferred / not-needed */
     public enum RequirementLevel {
         REQUIRED, PREFERRED, NOT_NEEDED
     }

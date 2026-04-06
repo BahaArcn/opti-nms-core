@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.CompoundIndexes;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Data
@@ -31,5 +32,6 @@ public class Tenant extends BaseEntity {
     @Schema(description = "UPF Prometheus metrics endpoint URL (optional)", example = "http://upf:9090/metrics")
     private String upfMetricsUrl;
 
+    @Indexed
     private boolean active = true;
 }

@@ -1,7 +1,9 @@
 package com.opticoms.optinmscore.domain.performance.controller;
 
 import com.opticoms.optinmscore.common.util.TenantContext;
-import com.opticoms.optinmscore.domain.performance.model.PmMetric;
+import com.opticoms.optinmscore.domain.performance.dto.PmMetricRequest;
+import com.opticoms.optinmscore.domain.performance.dto.PmMetricResponse;
+import com.opticoms.optinmscore.domain.performance.mapper.PmMetricMapper;
 import com.opticoms.optinmscore.domain.performance.service.PmService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,25 +21,28 @@ import java.util.List;
 public class PmController {
 
     private final PmService pmService;
+    private final PmMetricMapper pmMetricMapper;
 
     @Operation(summary = "Ingest a performance metric data point")
     @PostMapping("/metrics")
-    public ResponseEntity<PmMetric> ingestMetric(
+    public ResponseEntity<PmMetricResponse> ingestMetric(
             HttpServletRequest request,
-            @Valid @RequestBody PmMetric metric) {
+            @Valid @RequestBody PmMetricRequest metricRequest) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(pmService.ingestMetric(tenantId, metric));
+                .body(pmMetricMapper.toResponse(
+                        pmService.ingestMetric(tenantId, pmMetricMapper.toEntity(metricRequest))));
     }
 
     @Operation(summary = "Get metric history for a given time window")
     @GetMapping("/history")
-    public ResponseEntity<List<PmMetric>> getMetricHistory(
+    public ResponseEntity<List<PmMetricResponse>> getMetricHistory(
             HttpServletRequest request,
             @RequestParam String metric,
             @RequestParam(defaultValue = "60") int minutes) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(pmService.getMetricsHistory(tenantId, metric, minutes));
+        return ResponseEntity.ok(
+                pmMetricMapper.toResponseList(pmService.getMetricsHistory(tenantId, metric, minutes)));
     }
 
     @Operation(summary = "Get the latest value of a metric")

@@ -25,32 +25,24 @@ import java.util.Optional;
  * @version 0.1.0
  */
 @Configuration
-@EnableMongoAuditing // ✅ MongoDB auditing'i aktif et
+@EnableMongoAuditing
 public class MongoAuditingConfig {
 
     /**
-     * AuditorAware bean: Mevcut kullanıcıyı Spring Data MongoDB'ye söyler.
-     *
-     * Spring Security context'inden current user'ı alır.
-     * Eğer user yoksa (anonymous request) "system" döner.
-     *
-     * @return AuditorAware implementation
+     * Supplies the current principal name for {@code @CreatedBy} / {@code @LastModifiedBy}.
+     * Uses Spring Security; falls back to {@code "system"} when unauthenticated or anonymous.
      */
     @Bean
     public AuditorAware<String> auditorProvider() {
         return () -> {
-            // Spring Security context'inden current user'ı al
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
             if (authentication == null || !authentication.isAuthenticated()) {
-                // User login olmamışsa "system" yaz
                 return Optional.of("system");
             }
 
-            // Authenticated user'ın username'ini döndür
             String username = authentication.getName();
 
-            // "anonymousUser" Spring Security'nin default anonymous user'ı
             if ("anonymousUser".equals(username)) {
                 return Optional.of("system");
             }

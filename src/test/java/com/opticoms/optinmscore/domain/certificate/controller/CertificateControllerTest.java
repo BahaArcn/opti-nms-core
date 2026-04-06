@@ -1,10 +1,13 @@
 package com.opticoms.optinmscore.domain.certificate.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opticoms.optinmscore.domain.certificate.dto.CertificateEntryResponse;
+import com.opticoms.optinmscore.domain.certificate.mapper.CertificateEntryMapper;
 import com.opticoms.optinmscore.domain.certificate.model.CertificateEntry;
 import com.opticoms.optinmscore.domain.certificate.service.CertificateService;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
 import com.opticoms.optinmscore.security.JwtService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -37,6 +40,41 @@ class CertificateControllerTest {
     @MockBean private CertificateService certificateService;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
+    @MockBean private CertificateEntryMapper certificateEntryMapper;
+
+    @BeforeEach
+    void setUpMapperStubs() {
+        when(certificateEntryMapper.toEntity(any())).thenReturn(new CertificateEntry());
+        when(certificateEntryMapper.toResponse(any())).thenAnswer(inv -> {
+            CertificateEntry e = inv.getArgument(0);
+            if (e == null) return null;
+            CertificateEntryResponse r = new CertificateEntryResponse();
+            r.setId(e.getId());
+            r.setName(e.getName());
+            r.setCertType(e.getCertType());
+            r.setCertificatePem(e.getCertificatePem());
+            r.setSubjectDn(e.getSubjectDn());
+            r.setIssuerDn(e.getIssuerDn());
+            r.setSerialNumber(e.getSerialNumber());
+            r.setNotBefore(e.getNotBefore());
+            r.setNotAfter(e.getNotAfter());
+            r.setStatus(e.getStatus());
+            r.setDescription(e.getDescription());
+            return r;
+        });
+        when(certificateEntryMapper.toResponseList(any())).thenAnswer(inv -> {
+            List<CertificateEntry> entities = inv.getArgument(0);
+            return entities.stream().map(e -> {
+                CertificateEntryResponse r = new CertificateEntryResponse();
+                r.setId(e.getId());
+                r.setName(e.getName());
+                r.setCertType(e.getCertType());
+                r.setStatus(e.getStatus());
+                r.setDescription(e.getDescription());
+                return r;
+            }).toList();
+        });
+    }
 
     @Test
     @WithMockUser(roles = "ADMIN")

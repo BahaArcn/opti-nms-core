@@ -42,3 +42,5 @@ logging:
 app:
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS}
+  rate-limit:
+    store: mongodb

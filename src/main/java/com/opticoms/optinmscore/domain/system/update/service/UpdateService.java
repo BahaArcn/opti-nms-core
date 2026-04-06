@@ -8,6 +8,8 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.stereotype.Service;
@@ -128,7 +130,7 @@ public class UpdateService {
             );
         } catch (Exception e) {
             log.error("Failed to trigger rolling restart for {}: {}", deploymentName, e.getMessage());
-            throw new RuntimeException("Failed to trigger rolling restart: " + e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to trigger rolling restart");
         }
     }
 }

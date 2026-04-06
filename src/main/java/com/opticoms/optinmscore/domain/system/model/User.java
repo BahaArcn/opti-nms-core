@@ -45,11 +45,12 @@ public class User extends BaseEntity implements UserDetails {
 
     private boolean active = true;
 
-    // --- UserDetails Metotları ---
+    private boolean systemProtected = false;
+
+    // --- UserDetails ---
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        // Role enum değerini "ROLE_ADMIN" formatına çeviriyoruz
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
     }
 

@@ -1,16 +1,13 @@
 package com.opticoms.optinmscore.domain.system.controller;
 
+import com.opticoms.optinmscore.domain.system.dto.AuthResponse;
+import com.opticoms.optinmscore.domain.system.dto.LoginRequest;
 import com.opticoms.optinmscore.domain.system.model.User;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
 import com.opticoms.optinmscore.security.JwtService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -33,10 +30,16 @@ public class AuthController {
     @SecurityRequirements
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        log.debug("Login attempt for user: {} in tenant: {}", request.getUsername(), request.getTenantId());
+        String[] parts = request.getUsername().split("@", 2);
+        if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
+            throw new BadCredentialsException("Invalid credentials");
+        }
+        String username = parts[0];
+        String tenantId = parts[1];
 
-        User domainUser = (User) userDetailsService.loadUserByUsernameAndTenantId(
-                request.getUsername(), request.getTenantId());
+        log.debug("Login attempt for user: {} in tenant: {}", username, tenantId);
+
+        User domainUser = (User) userDetailsService.loadUserByUsernameAndTenantId(username, tenantId);
 
         if (!domainUser.isEnabled()) {
             throw new DisabledException("Account is disabled");
@@ -49,7 +52,6 @@ public class AuthController {
                 domainUser.getUsername(), domainUser.getRole(), domainUser.getTenantId());
 
         String token = jwtService.generateToken(domainUser);
-        log.debug("JWT token generated successfully");
 
         AuthResponse response = new AuthResponse();
         response.setToken(token);
@@ -59,30 +61,5 @@ public class AuthController {
         response.setTenantId(domainUser.getTenantId());
 
         return ResponseEntity.ok(response);
-    }
-
-    // --- DTO CLASSES ---
-
-    @Data
-    @NoArgsConstructor
-    public static class LoginRequest {
-        @NotBlank(message = "Tenant ID is required")
-        private String tenantId;
-        @NotBlank(message = "Username is required")
-        private String username;
-        @NotBlank(message = "Password is required")
-        private String password;
-    }
-
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class AuthResponse {
-        private String token;
-        private String username;
-        private String email;
-        private String role;
-        private String tenantId;
     }
 }

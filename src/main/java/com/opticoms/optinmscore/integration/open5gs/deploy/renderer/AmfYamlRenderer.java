@@ -12,9 +12,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * AmfConfig + GlobalConfig → amfcfg.yaml string üretir.
+ * Renders AmfConfig + GlobalConfig into amfcfg.yaml.
  *
- * LLD Parametre → YAML Path eşlemesi (Tablo 3 + Tablo 5):
+ * LLD parameter → YAML path (tables 3 + 5):
  *
  *  GlobalConfig.maxSupportedDevices  → global.max.ue
  *  GlobalConfig.networkFullName      → amf.network_name.full
@@ -28,7 +28,7 @@ import java.util.Map;
  *  AmfConfig.securityParameters      → amf.security.integrity_order / ciphering_order
  *  AmfConfig.nasTimers5g.t3512       → amf.time.t3512.value
  *  AmfConfig.n2InterfaceIp           → amf.ngap.server[0].address
- *    (eğer null ise dev: n2 kullanılır — K8s ortamında interface adıyla çalışır)
+ *    (if null, uses dev: n2 — typical in K8s with interface names)
  */
 @Component
 public class AmfYamlRenderer {
@@ -37,23 +37,19 @@ public class AmfYamlRenderer {
 
     public AmfYamlRenderer() {
         DumperOptions opts = new DumperOptions();
-        // YAML blok stili: okunabilir, inline değil
         opts.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
-        // İlk satırda "---" çıkmasın
         opts.setExplicitStart(false);
         this.yaml = new Yaml(opts);
     }
 
     /**
-     * @param global GlobalConfig — network_name ve max.ue için
-     * @param amf    AmfConfig    — tüm AMF parametreleri için
-     * @return amfcfg.yaml içeriği (String)
+     * @param global network display names and global limits
+     * @param amf    AMF-specific parameters
      */
     public String render(GlobalConfig global, AmfConfig amf) {
         Map<String, Object> root = new LinkedHashMap<>();
 
         // ── logger ──────────────────────────────────────────────────────────
-        // Sabit: container içi log dosyası yolu değişmiyor
         Map<String, Object> logger = new LinkedHashMap<>();
         logger.put("file", "/open5gs/install/var/log/open5gs/amf.log");
         root.put("logger", logger);
@@ -70,18 +66,16 @@ public class AmfYamlRenderer {
         // ── amf ─────────────────────────────────────────────────────────────
         Map<String, Object> amfSection = new LinkedHashMap<>();
 
-        // sbi: Service Based Interface — sabit K8s service discovery, değişmiyor
+        // sbi: fixed K8s service discovery
         amfSection.put("sbi", buildSbiSection());
 
-        // ngap: N2 arayüzü (gNB ↔ AMF)
-        // LLD Tablo 5: Ngap-Addr → amf.yaml
-        // n2InterfaceIp null ise K8s'te interface adı "n2" kullanılır
+        // ngap: N2 (gNB ↔ AMF); LLD table 5: Ngap-Addr → amf.yaml
         amfSection.put("ngap", buildNgapSection(amf.getN2InterfaceIp()));
 
-        // metrics: Prometheus scrape endpoint — sabit
+        // metrics: Prometheus scrape endpoint (fixed)
         amfSection.put("metrics", buildMetricsSection());
 
-        // guami: AMF'in kimliği (PLMN + AMF-ID)
+        // guami: AMF identity (PLMN + AMF-ID)
         // LLD Tablo 5: Amf-Id (region/set/pointer) → amf.yaml
         amfSection.put("guami", buildGuamiList(global, amf));
 
@@ -91,20 +85,18 @@ public class AmfYamlRenderer {
         // plmn_support: Global PLMN > AMF override, with AMF slices
         amfSection.put("plmn_support", buildPlmnSupportList(global, amf));
 
-        // security: 5G bütünlük ve şifreleme algoritmaları sırası
+        // security: 5G integrity and ciphering algorithm order
         // LLD Tablo 5: Sec-Order-5g → amf.yaml
         amfSection.put("security", buildSecuritySection(amf));
 
-        // network_name: UE status bar'ında görünen ağ adı
-        // LLD Tablo 3: Network-Name (Full/Short) → amf.yaml (5G)
-        // Gap 4 çözümü: GlobalConfig'ten geliyor
+        // network_name: display name on the UE (LLD table 3; Gap 4: from GlobalConfig)
         amfSection.put("network_name", buildNetworkNameSection(global));
 
-        // amf_name: AMF'in 5GC içindeki ismi
+        // amf_name: AMF name inside 5GC
         // LLD Tablo 5: Amf-Name → amf.yaml
         amfSection.put("amf_name", amf.getAmfName());
 
-        // time: NAS timer konfigürasyonu
+        // time: NAS timers
         // LLD Tablo 5: Nas-Timers-5g (T3502, T3512) → amf.yaml
         amfSection.put("time", buildTimeSection(amf));
 
@@ -113,10 +105,8 @@ public class AmfYamlRenderer {
         return yaml.dump(root);
     }
 
-    // ── Private builder metodları ────────────────────────────────────────────
-
     private Map<String, Object> buildSbiSection() {
-        // SBI adresi K8s service adından geliyor — tenant bağımsız, sabit kalıyor
+        // SBI from K8s service DNS (tenant-agnostic constants)
         Map<String, Object> sbi = new LinkedHashMap<>();
         List<Map<String, Object>> servers = new ArrayList<>();
         Map<String, Object> server = new LinkedHashMap<>();
@@ -142,7 +132,6 @@ public class AmfYamlRenderer {
         List<Map<String, Object>> servers = new ArrayList<>();
         Map<String, Object> server = new LinkedHashMap<>();
 
-        // Eğer IP adresi verilmişse address kullan, yoksa K8s interface adı
         if (n2InterfaceIp != null && !n2InterfaceIp.isBlank()) {
             server.put("address", n2InterfaceIp);
         } else {
@@ -254,7 +243,6 @@ public class AmfYamlRenderer {
     }
 
     private Map<String, Object> buildNetworkNameSection(GlobalConfig global) {
-        // Gap 4 çözümü: GlobalConfig.networkFullName/networkShortName → amf.network_name
         Map<String, Object> networkName = new LinkedHashMap<>();
         networkName.put("full", global.getNetworkFullName());
         if (global.getNetworkShortName() != null && !global.getNetworkShortName().isBlank()) {
@@ -280,8 +268,6 @@ public class AmfYamlRenderer {
         return time;
     }
 
-    // ── Yardımcı metodlar ────────────────────────────────────────────────────
-
     private Map<String, Object> plmnToMap(AmfConfig.Plmn plmn) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("mcc", Integer.parseInt(plmn.getMcc()));
@@ -296,10 +282,7 @@ public class AmfYamlRenderer {
         return map;
     }
 
-    /**
-     * SD değerini normalleştirir.
-     * "FFFFFF" veya null → "ffffff" (Open5GS küçük harf kullanıyor)
-     */
+    /** Normalizes SD; {@code FFFFFF} or blank → {@code ffffff} (Open5GS lower-case). */
     private String normalizeSd(String sd) {
         if (sd == null || sd.isBlank() || sd.equalsIgnoreCase("FFFFFF")) {
             return "ffffff";

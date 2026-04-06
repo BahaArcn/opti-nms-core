@@ -1,10 +1,14 @@
 package com.opticoms.optinmscore.domain.performance.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opticoms.optinmscore.domain.performance.dto.PmMetricRequest;
+import com.opticoms.optinmscore.domain.performance.dto.PmMetricResponse;
+import com.opticoms.optinmscore.domain.performance.mapper.PmMetricMapper;
 import com.opticoms.optinmscore.domain.performance.model.PmMetric;
 import com.opticoms.optinmscore.domain.performance.service.PmService;
 import com.opticoms.optinmscore.security.JwtService;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -31,8 +35,42 @@ class PmControllerTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockBean private PmService pmService;
+    @MockBean private PmMetricMapper pmMetricMapper;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
+
+    @BeforeEach
+    void stubPmMetricMapper() {
+        when(pmMetricMapper.toEntity(any(PmMetricRequest.class))).thenAnswer(invocation -> {
+            PmMetricRequest req = invocation.getArgument(0);
+            PmMetric m = new PmMetric();
+            m.setMetricName(req.getMetricName());
+            m.setValue(req.getValue());
+            m.setTimestamp(req.getTimestamp());
+            m.setLabels(req.getLabels());
+            m.setMetricType(req.getMetricType());
+            return m;
+        });
+        when(pmMetricMapper.toResponse(any(PmMetric.class))).thenAnswer(invocation -> {
+            PmMetric e = invocation.getArgument(0);
+            PmMetricResponse r = new PmMetricResponse();
+            r.setMetricName(e.getMetricName());
+            r.setValue(e.getValue());
+            return r;
+        });
+        when(pmMetricMapper.toResponseList(anyList())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            List<PmMetric> list = invocation.getArgument(0);
+            return list.stream()
+                    .map(e -> {
+                        PmMetricResponse r = new PmMetricResponse();
+                        r.setMetricName(e.getMetricName());
+                        r.setValue(e.getValue());
+                        return r;
+                    })
+                    .toList();
+        });
+    }
 
     @Test
     @WithMockUser(roles = "OPERATOR")
@@ -41,12 +79,16 @@ class PmControllerTest {
         metric.setMetricName("cpu_usage");
         metric.setValue(85.5);
 
+        PmMetricRequest request = new PmMetricRequest();
+        request.setMetricName("cpu_usage");
+        request.setValue(85.5);
+
         when(pmService.ingestMetric(eq(TENANT), any())).thenReturn(metric);
 
         mockMvc.perform(post("/api/v1/performance/metrics")
                         .requestAttr("tenantId", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(metric)))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.metricName").value("cpu_usage"))
                 .andExpect(jsonPath("$.value").value(85.5));

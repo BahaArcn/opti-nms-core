@@ -16,3 +16,9 @@ spring:
 open5gs:
   mongo:
     uri: ${OPEN5GS_MONGO_URI:mongodb://localhost:27017/open5gs}
+
+management:
+  endpoint:
+    health:
+      show-details: always
+      show-components: always

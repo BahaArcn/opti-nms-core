@@ -1,10 +1,13 @@
 package com.opticoms.optinmscore.domain.apn.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opticoms.optinmscore.domain.apn.dto.ApnProfileResponse;
+import com.opticoms.optinmscore.domain.apn.mapper.ApnProfileMapper;
 import com.opticoms.optinmscore.domain.apn.model.ApnProfile;
 import com.opticoms.optinmscore.domain.apn.service.ApnProfileService;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
 import com.opticoms.optinmscore.security.JwtService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -37,6 +40,40 @@ class ApnProfileControllerTest {
     @MockBean private ApnProfileService apnProfileService;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
+    @MockBean private ApnProfileMapper apnProfileMapper;
+
+    @BeforeEach
+    void setUpMapperStubs() {
+        when(apnProfileMapper.toEntity(any())).thenReturn(new ApnProfile());
+        when(apnProfileMapper.toResponse(any())).thenAnswer(inv -> {
+            ApnProfile e = inv.getArgument(0);
+            if (e == null) return null;
+            ApnProfileResponse r = new ApnProfileResponse();
+            r.setId(e.getId());
+            r.setDnn(e.getDnn());
+            r.setSst(e.getSst());
+            r.setEnabled(e.isEnabled());
+            r.setStatus(e.getStatus());
+            r.setDescription(e.getDescription());
+            r.setQos(e.getQos());
+            r.setSessionAmbr(e.getSessionAmbr());
+            r.setPduSessionType(e.getPduSessionType());
+            return r;
+        });
+        when(apnProfileMapper.toResponseList(any())).thenAnswer(inv -> {
+            List<ApnProfile> entities = inv.getArgument(0);
+            return entities.stream().map(e -> {
+                ApnProfileResponse r = new ApnProfileResponse();
+                r.setId(e.getId());
+                r.setDnn(e.getDnn());
+                r.setSst(e.getSst());
+                r.setEnabled(e.isEnabled());
+                r.setStatus(e.getStatus());
+                r.setDescription(e.getDescription());
+                return r;
+            }).toList();
+        });
+    }
 
     @Test
     @WithMockUser(roles = "ADMIN")

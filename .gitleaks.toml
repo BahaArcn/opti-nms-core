@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[rules]]
+description = "Ignore test property files with dummy secrets"
+id = "test-config-override"
+path = '''src/test/resources/.*'''

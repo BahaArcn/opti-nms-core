@@ -2,6 +2,8 @@ package com.opticoms.optinmscore.domain.system.update.controller;
 
 import com.opticoms.optinmscore.config.RateLimitTestConfig;
 import com.opticoms.optinmscore.config.SecurityConfiguration;
+import com.opticoms.optinmscore.config.security.MasterTokenFilter;
+import com.opticoms.optinmscore.config.security.MasterTokenFilterConfig;
 import com.opticoms.optinmscore.domain.system.model.User;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
 import com.opticoms.optinmscore.domain.system.update.dto.VersionInfo;
@@ -21,7 +23,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(SystemUpdateController.class)
-@Import({SecurityConfiguration.class, JwtAuthenticationFilter.class, RateLimitTestConfig.class})
+@Import({SecurityConfiguration.class, JwtAuthenticationFilter.class, RateLimitTestConfig.class, MasterTokenFilterConfig.class})
 class SystemSecurityTest {
 
     private static final String TENANT = "OPTC-0001/0001/01";

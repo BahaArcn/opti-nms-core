@@ -1,5 +1,8 @@
 package com.opticoms.optinmscore.domain.system.controller;
 
+import com.opticoms.optinmscore.domain.license.dto.LicenseRequest;
+import com.opticoms.optinmscore.domain.license.dto.LicenseResponse;
+import com.opticoms.optinmscore.domain.license.mapper.LicenseMapper;
 import com.opticoms.optinmscore.domain.license.model.License;
 import com.opticoms.optinmscore.domain.license.service.LicenseService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,15 +21,17 @@ import org.springframework.web.bind.annotation.*;
 public class SystemLicenseController {
 
     private final LicenseService licenseService;
+    private final LicenseMapper licenseMapper;
 
     @Operation(summary = "Create or update license for a tenant (SUPER_ADMIN only)")
     @PostMapping
-    public ResponseEntity<License> createOrUpdate(
+    public ResponseEntity<LicenseResponse> createOrUpdate(
             @Parameter(description = "Tenant ID", example = "TURK-0001/0001/01")
             @RequestParam String tenantId,
-            @Valid @RequestBody License license) {
+            @Valid @RequestBody LicenseRequest licenseRequest) {
+        License entity = licenseMapper.toEntity(licenseRequest);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(licenseService.createOrUpdateLicense(tenantId, license));
+                .body(licenseMapper.toResponse(licenseService.createOrUpdateLicense(tenantId, entity)));
     }
 
     @Operation(summary = "Delete license for a tenant (SUPER_ADMIN only)")
@@ -40,10 +45,10 @@ public class SystemLicenseController {
 
     @Operation(summary = "Get license for a tenant (SUPER_ADMIN only)")
     @GetMapping
-    public ResponseEntity<License> getLicense(
+    public ResponseEntity<LicenseResponse> getLicense(
             @Parameter(description = "Tenant ID", example = "TURK-0001/0001/01")
             @RequestParam String tenantId) {
-        return ResponseEntity.ok(licenseService.getLicense(tenantId));
+        return ResponseEntity.ok(licenseMapper.toResponse(licenseService.getLicense(tenantId)));
     }
 
     @Operation(summary = "Get license status with usage counts for a tenant (SUPER_ADMIN only)")

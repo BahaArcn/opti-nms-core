@@ -200,6 +200,7 @@ class UserServiceTest {
     @Test
     void deleteUser_adminUser_throwsForbidden() {
         user.setUsername("admin");
+        user.setSystemProtected(true);
         when(userRepository.findByIdAndTenantId("user-1", TENANT)).thenReturn(Optional.of(user));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,

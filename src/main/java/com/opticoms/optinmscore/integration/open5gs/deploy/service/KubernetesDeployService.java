@@ -16,18 +16,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Fabric8 Kubernetes Client kullanarak:
- * 1. open5gs namespace'indeki ConfigMap'leri günceller.
- * 2. İlgili Deployment'lara rollout restart uygular.
+ * Applies rendered YAML to the cluster using the Fabric8 {@link KubernetesClient}:
+ * 1. Update ConfigMaps in the configured namespace (default {@code open5gs}).
+ * 2. Roll out restarted Deployments.
  *
- * "Desired-state" yaklaşımı:
- * Delta hesabı yapılmaz. Her çağrıda ConfigMap'in tüm içeriği
- * yeni üretilmiş YAML ile tamamen değiştirilir ve pod restart edilir.
+ * Desired-state: no delta merge; each call replaces ConfigMap data with freshly rendered YAML and restarts pods.
  *
- * K8s bağlantısı:
- * - In-cluster (pod içinde): ServiceAccount token otomatik okunur
- * - Local dev: ~/.kube/config veya KUBECONFIG env var
- * - kubernetes.deploy.enabled=false → K8s'e hiç bağlanmaz (dev/test modu)
+ * Connectivity: in-cluster ServiceAccount, or local {@code ~/.kube/config} / {@code KUBECONFIG}.
+ * When {@code kubernetes.deploy.enabled=false}, no API calls are made (dev/test).
  */
 @Slf4j
 @Service
@@ -40,17 +36,14 @@ public class KubernetesDeployService {
     @Value("${kubernetes.namespace:open5gs}")
     private String namespace;
 
-    // application.yml → kubernetes.deploy.enabled
-    // false ise K8s'e apply yapılmaz, sadece log yazılır (local dev için)
+    // application.yml → kubernetes.deploy.enabled (false: log only, no cluster apply)
     @Value("${kubernetes.deploy.enabled:true}")
     private boolean deployEnabled;
 
     /**
-     * Tüm NF'leri deploy eder.
-     * deploy/all endpoint'i tarafından çağrılır.
+     * Applies all NFs (used by {@code /deploy/all}).
      *
-     * @param rendered ConfigRenderService'ten gelen YAML'lar
-     * @return Her NF için başarı/başarısızlık bilgisi
+     * @param rendered output from {@link com.opticoms.optinmscore.integration.open5gs.deploy.service.ConfigRenderService}
      */
     public DeployResult applyAll(RenderedConfigs rendered) {
         List<String> updatedCms = new ArrayList<>();
@@ -67,7 +60,7 @@ public class KubernetesDeployService {
                 updatedCms, errors);
         restartDeployment("open5gs-smf1", restartedDeps, errors);
 
-        // UPF (slice 1) — hem upfcfg.yaml hem wrapper.sh
+        // UPF (slice 1): upfcfg.yaml + wrapper.sh
         applyConfigMap("upf1-configmap",
                 Map.of("upfcfg.yaml", rendered.getUpfYaml(),
                        "wrapper.sh",  rendered.getWrapperSh()),
@@ -85,7 +78,6 @@ public class KubernetesDeployService {
         restartDeployment("open5gs-nssf", restartedDeps, errors);
 
         // Common NFs: ausf / udm / udr / bsf / pcf / scp
-        // Her NF için: <nf>-configmap → <nf>cfg.yaml → open5gs-<nf>
         if (rendered.getCommonNfYamls() != null) {
             for (Map.Entry<String, String> entry : rendered.getCommonNfYamls().entrySet()) {
                 String nf = entry.getKey();
@@ -112,9 +104,7 @@ public class KubernetesDeployService {
         return buildResult(updatedCms, restartedDeps, errors);
     }
 
-    /**
-     * Sadece AMF ConfigMap'ini günceller ve AMF'i restart eder.
-     */
+    /** Updates the AMF ConfigMap and restarts the AMF Deployment. */
     public DeployResult applyAmf(RenderedConfigs rendered) {
         List<String> updatedCms = new ArrayList<>();
         List<String> restartedDeps = new ArrayList<>();
@@ -127,9 +117,7 @@ public class KubernetesDeployService {
         return buildResult(updatedCms, restartedDeps, errors);
     }
 
-    /**
-     * Sadece SMF ConfigMap'ini günceller ve SMF'i restart eder.
-     */
+    /** Updates the SMF ConfigMap and restarts the SMF Deployment. */
     public DeployResult applySmf(RenderedConfigs rendered) {
         List<String> updatedCms = new ArrayList<>();
         List<String> restartedDeps = new ArrayList<>();
@@ -142,9 +130,7 @@ public class KubernetesDeployService {
         return buildResult(updatedCms, restartedDeps, errors);
     }
 
-    /**
-     * Sadece UPF ConfigMap'ini günceller ve UPF'i restart eder.
-     */
+    /** Updates the UPF ConfigMap and restarts the UPF Deployment. */
     public DeployResult applyUpf(RenderedConfigs rendered) {
         List<String> updatedCms = new ArrayList<>();
         List<String> restartedDeps = new ArrayList<>();
@@ -159,24 +145,19 @@ public class KubernetesDeployService {
         return buildResult(updatedCms, restartedDeps, errors);
     }
 
-    // ── Core metodlar ────────────────────────────────────────────────────────
-
     /**
-     * ConfigMap'i K8s'te günceller.
+     * Updates or creates a ConfigMap (GET → merge {@code data} → update).
+     * Missing ConfigMap: record error and continue with other NFs (no thrown exception).
      *
-     * Fabric8 yaklaşımı: önce GET → data alanını değiştir → PATCH/UPDATE.
-     * ConfigMap yoksa hata listesine yaz, exception fırlatma (diğer NF'ler devam etsin).
-     *
-     * @param configMapName  K8s ConfigMap adı (örn. "amf-configmap")
-     * @param dataEntries    ConfigMap.data içine yazılacak key-value çiftleri
-     * @param updatedCms     Başarılı güncelleme listesi (out param)
-     * @param errors         Hata listesi (out param)
+     * @param configMapName  e.g. {@code amf-configmap}
+     * @param dataEntries    keys/values for {@code ConfigMap.data}
+     * @param updatedCms     successful updates (output)
+     * @param errors         failures (output)
      */
     private void applyConfigMap(String configMapName,
                                 Map<String, String> dataEntries,
                                 List<String> updatedCms,
                                 List<String> errors) {
-        // K8s deploy kapalıysa (local dev/test): sadece log yaz, gerçek apply yapma
         if (!deployEnabled) {
             log.info("[DRY-RUN] Would update ConfigMap: {}/{}", namespace, configMapName);
             updatedCms.add(configMapName + " (dry-run)");
@@ -184,7 +165,6 @@ public class KubernetesDeployService {
         }
 
         try {
-            // 1. Mevcut ConfigMap'i K8s'ten al
             ConfigMap existing = k8sClient.configMaps()
                     .inNamespace(namespace)
                     .withName(configMapName)
@@ -226,15 +206,11 @@ public class KubernetesDeployService {
     }
 
     /**
-     * Deployment'a rollout restart uygular.
+     * Triggers a rollout restart (same idea as {@code kubectl rollout restart}):
+     * sets pod-template annotation {@code kubectl.kubernetes.io/restartedAt}, which starts a new ReplicaSet
+     * so pods reload mounted ConfigMap data.
      *
-     * "kubectl rollout restart" ne yapar?
-     * Deployment'ın pod template annotation'ına
-     * "kubectl.kubernetes.io/restartedAt" = <timestamp> yazar.
-     * Bu değişiklik Deployment controller'ını yeni bir ReplicaSet başlatmaya tetikler.
-     * Sonuç: tüm pod'lar yeni ConfigMap ile yeniden başlar.
-     *
-     * @param deploymentName K8s Deployment adı (örn. "open5gs-amf")
+     * @param deploymentName e.g. {@code open5gs-amf}
      */
     private void restartDeployment(String deploymentName,
                                    List<String> restartedDeps,

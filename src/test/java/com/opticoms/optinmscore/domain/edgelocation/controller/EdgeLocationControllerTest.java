@@ -1,10 +1,14 @@
 package com.opticoms.optinmscore.domain.edgelocation.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opticoms.optinmscore.domain.edgelocation.dto.EdgeLocationRequest;
+import com.opticoms.optinmscore.domain.edgelocation.dto.EdgeLocationResponse;
+import com.opticoms.optinmscore.domain.edgelocation.mapper.EdgeLocationMapper;
 import com.opticoms.optinmscore.domain.edgelocation.model.EdgeLocation;
 import com.opticoms.optinmscore.domain.edgelocation.service.EdgeLocationService;
 import com.opticoms.optinmscore.security.JwtService;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -35,6 +39,23 @@ class EdgeLocationControllerTest {
     @MockBean private EdgeLocationService edgeLocationService;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
+    @MockBean private EdgeLocationMapper edgeLocationMapper;
+
+    @BeforeEach
+    void setUp() {
+        when(edgeLocationMapper.toResponse(any(EdgeLocation.class))).thenAnswer(inv -> {
+            EdgeLocation e = inv.getArgument(0);
+            EdgeLocationResponse r = new EdgeLocationResponse();
+            r.setName(e.getName());
+            return r;
+        });
+        when(edgeLocationMapper.toEntity(any(EdgeLocationRequest.class))).thenAnswer(inv -> {
+            EdgeLocationRequest req = inv.getArgument(0);
+            EdgeLocation el = new EdgeLocation();
+            el.setName(req.getName());
+            return el;
+        });
+    }
 
     @Test
     @WithMockUser(roles = "ADMIN")

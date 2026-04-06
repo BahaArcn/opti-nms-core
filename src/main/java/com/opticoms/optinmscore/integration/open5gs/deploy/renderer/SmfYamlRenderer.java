@@ -3,7 +3,9 @@ package com.opticoms.optinmscore.integration.open5gs.deploy.renderer;
 import com.opticoms.optinmscore.domain.network.model.GlobalConfig;
 import com.opticoms.optinmscore.domain.network.model.SmfConfig;
 import com.opticoms.optinmscore.domain.network.model.UpfConfig;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
@@ -13,9 +15,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * SmfConfig + GlobalConfig → smfcfg.yaml string üretir.
+ * Renders SmfConfig + GlobalConfig (+ UpfConfig for PFCP) into smfcfg.yaml.
  *
- * LLD Parametre → YAML Path eşlemesi (Tablo 3 + Tablo 4 + Tablo 5):
+ * LLD parameter → YAML path (tables 3 + 4 + 5):
  *
  *  GlobalConfig.maxSupportedDevices         → global.max.ue
  *
@@ -25,7 +27,7 @@ import java.util.Map;
  *  SmfConfig.securityIndication.ciphering   → smf.security_indication.confidentiality_protection_indication
  *
  *  GlobalConfig.ueIpPoolList[*].ipRange      → smf.session[*].subnet (via tunInterface lookup)
- *  SmfConfig.apnList[*].apnDnnName          → smf.session[*].dnn  (opsiyonel)
+ *  SmfConfig.apnList[*].apnDnnName          → smf.session[*].dnn  (optional)
  *  SmfConfig.apnList[*].local=false         → smf.pfcp.client.upf[*].address = remoteUpfIp + dnn
  *  SmfConfig.apnList[*].local=true          → smf.pfcp.client.upf[*].address = UpfConfig.n4PfcpIp + dnn
  *
@@ -45,10 +47,9 @@ public class SmfYamlRenderer {
     }
 
     /**
-     * @param smf    SmfConfig — SMF'e özgü tüm parametreler
-     * @param global GlobalConfig — max.ue için
-     * @param upf    UpfConfig — PFCP client address (n4PfcpIp) için
-     * @return smfcfg.yaml içeriği (String)
+     * @param smf    SMF-specific parameters
+     * @param global global limits (e.g. max.ue)
+     * @param upf    UPF PFCP listen address ({@code n4PfcpIp}) for local DNNs
      */
     public String render(SmfConfig smf, GlobalConfig global, UpfConfig upf) {
         Map<String, Object> root = new LinkedHashMap<>();
@@ -70,22 +71,22 @@ public class SmfYamlRenderer {
         // ── smf ─────────────────────────────────────────────────────────────
         Map<String, Object> smfSection = new LinkedHashMap<>();
 
-        // sbi: sabit K8s service discovery
+        // sbi: fixed K8s service discovery
         smfSection.put("sbi", buildSbiSection());
 
-        // pfcp: SMF ↔ UPF kontrolü için PFCP
-        // local=true  → UPF'in n4PfcpIp'si + DNN adı
-        // local=false → remoteUpfIp + DNN adı (CUPS)
+        // pfcp: SMF ↔ UPF control plane
+        // local=true  → UPF n4PfcpIp + DNN
+        // local=false → remoteUpfIp + DNN (CUPS)
         smfSection.put("pfcp", buildPfcpSection(smf, upf));
 
-        // gtpc/gtpu: 4G/5G data plane — K8s interface bazlı
+        // gtpc/gtpu: 4G/5G user plane — K8s interface names
         smfSection.put("gtpc", buildSimpleDevSection("gtpc", "eth0"));
         smfSection.put("gtpu", buildSimpleDevSection("gtpu", "n3"));
 
         // metrics: Prometheus
         smfSection.put("metrics", buildMetricsSection());
 
-        // session: UE IP havuzları (from GlobalConfig.ueIpPoolList via tunInterface lookup)
+        // session: UE IP pools (from GlobalConfig.ueIpPoolList via tunInterface lookup)
         smfSection.put("session", buildSessionList(smf, global));
 
         // dns: SMF override > Global fallback
@@ -104,14 +105,14 @@ public class SmfYamlRenderer {
         ctf.put("enabled", "auto");
         smfSection.put("ctf", ctf);
 
-        // freeDiameter: 4G Diameter protokol konfigürasyonu (sabit yol)
+        // freeDiameter: 4G Diameter config (fixed path)
         smfSection.put("freeDiameter", "/open5gs/install/etc/freeDiameter/smf.conf");
 
-        // security_indication: 5G user plane güvenlik göstergesi
+        // security_indication: 5G user-plane security indication
         // LLD Tablo 5: Sec-ind-5g → smf.yaml
         smfSection.put("security_indication", buildSecurityIndicationSection(smf));
 
-        // info: Slice ↔ DNN ilişkisi
+        // info: slice ↔ DNN mapping
         // LLD Tablo 5: Slice-List + Dnn-List → smf.yaml
         smfSection.put("info", buildInfoSection(smf));
 
@@ -119,8 +120,6 @@ public class SmfYamlRenderer {
 
         return yaml.dump(root);
     }
-
-    // ── Private builder metodları ────────────────────────────────────────────
 
     private Map<String, Object> buildSbiSection() {
         Map<String, Object> sbi = new LinkedHashMap<>();
@@ -147,16 +146,16 @@ public class SmfYamlRenderer {
     private Map<String, Object> buildPfcpSection(SmfConfig smf, UpfConfig upf) {
         Map<String, Object> pfcp = new LinkedHashMap<>();
 
-        // PFCP server: SMF tarafı — K8s n4 interface üzerinden dinle
+        // PFCP server: SMF side — listen on K8s n4 interface
         List<Map<String, Object>> servers = new ArrayList<>();
         Map<String, Object> server = new LinkedHashMap<>();
         server.put("dev", "n4");
         servers.add(server);
         pfcp.put("server", servers);
 
-        // PFCP client: SMF → UPF bağlantısı
-        // Her DNN için ayrı bir UPF entry üretilir
-        // local=true  → UpfConfig.n4PfcpIp (UPF'in n4 interface adresi) + DNN
+        // PFCP client: SMF → UPF
+        // One UPF entry per DNN
+        // local=true  → UpfConfig.n4PfcpIp (UPF n4 listen address) + DNN
         // local=false → SmfConfig.ApnDnn.remoteUpfIp (CUPS remote UPF)
         List<Map<String, Object>> upfList = new ArrayList<>();
 
@@ -164,12 +163,11 @@ public class SmfYamlRenderer {
             Map<String, Object> upfEntry = new LinkedHashMap<>();
 
             if (dnn.isLocal()) {
-                // Bug 2 düzeltmesi: "dev: n4" yerine UPF'in gerçek PFCP listen IP'si
-                // n4PfcpIp boşsa fallback: n4 dev kullan (K8s auto-discovery için)
+                // Prefer real PFCP listen IP over generic dev: n4
+                // If n4PfcpIp is unset, fall back to dev n4 (K8s-friendly)
                 if (upf != null && upf.getN4PfcpIp() != null && !upf.getN4PfcpIp().isBlank()) {
                     upfEntry.put("address", upf.getN4PfcpIp());
                 } else {
-                    // n4PfcpIp henüz girilmemişse güvenli fallback
                     upfEntry.put("dev", "n4");
                 }
             } else {
@@ -230,7 +228,8 @@ public class SmfYamlRenderer {
                 }
             }
         }
-        throw new IllegalStateException("UeIpPool not found for tunInterface: " + tunInterface);
+        throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "Configuration error: UeIpPool not found for tunInterface: " + tunInterface);
     }
 
     private String buildSubnetFromGatewayAndRange(String gatewayIp, String ueIpRange) {
@@ -238,7 +237,7 @@ public class SmfYamlRenderer {
             String prefix = ueIpRange.substring(ueIpRange.indexOf("/"));
             return gatewayIp + prefix;
         }
-        // Range format (x.x.x.x-y.y.y.y) varsa subnet belirlenemez, ham değer dön
+        // Range format (x.x.x.x-y.y.y.y): cannot derive subnet; return as-is
         return ueIpRange;
     }
 
@@ -262,22 +261,18 @@ public class SmfYamlRenderer {
     }
 
     private List<Map<String, Object>> buildInfoSection(SmfConfig smf) {
-        // smf.info: slice ↔ DNN eşlemesi
-        // Her benzersiz slice için bir entry, her DNN o slice'a ekleniyor
-        // Bu bölüm AMF'e hangi slices üzerinden hangi DNN'lere servis vereceğini söyler
+        // smf.info: slice ↔ DNN (tells the AMF which DNNs are served per slice/S-NSSAI)
         List<Map<String, Object>> infoList = new ArrayList<>();
 
         Map<String, Object> infoEntry = new LinkedHashMap<>();
         List<Map<String, Object>> sNssaiList = new ArrayList<>();
 
-        // Her DNN kendi slice'ına ait bir entry
         for (SmfConfig.ApnDnn dnn : smf.getApnList()) {
             Map<String, Object> nssaiEntry = new LinkedHashMap<>();
             if (dnn.getSliceId() != null) {
                 nssaiEntry.put("sst", dnn.getSliceId().getSst());
                 nssaiEntry.put("sd", normalizeSd(dnn.getSliceId().getSd()));
             } else {
-                // Default: slice 1, SD yok
                 nssaiEntry.put("sst", 1);
             }
             nssaiEntry.put("dnn", List.of(dnn.getApnDnnName()));

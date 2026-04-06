@@ -1,8 +1,12 @@
 package com.opticoms.optinmscore.domain.subscriber.controller;
 
+import com.opticoms.optinmscore.domain.subscriber.dto.SubscriberRequest;
+import com.opticoms.optinmscore.domain.subscriber.dto.SubscriberResponse;
 import com.opticoms.optinmscore.domain.subscriber.importer.SubscriberImportParser;
+import com.opticoms.optinmscore.domain.subscriber.mapper.SubscriberMapper;
 import com.opticoms.optinmscore.domain.subscriber.model.BulkImportResult;
 import com.opticoms.optinmscore.domain.subscriber.model.Subscriber;
+import com.opticoms.optinmscore.domain.subscriber.service.BulkImportService;
 import com.opticoms.optinmscore.domain.subscriber.service.SubscriberService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,12 +28,14 @@ import java.io.IOException;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/subscriber")
+@RequestMapping("/api/v1/subscribers")
 @RequiredArgsConstructor
 public class SubscriberController {
 
     private final SubscriberService subscriberService;
+    private final BulkImportService bulkImportService;
     private final List<SubscriberImportParser> parsers;
+    private final SubscriberMapper subscriberMapper;
 
     @Operation(summary = "Bulk import subscribers from Excel (.xlsx), JSON, or CSV file")
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -59,7 +65,7 @@ public class SubscriberController {
                         "File contains no subscriber records");
             }
 
-            BulkImportResult result = subscriberService.bulkImport(tenantId, parsed);
+            BulkImportResult result = bulkImportService.bulkImport(tenantId, parsed);
             return ResponseEntity.ok(result);
 
         } catch (IOException e) {
@@ -70,31 +76,36 @@ public class SubscriberController {
 
     @Operation(summary = "Create a new subscriber and provision to Open5GS")
     @PostMapping
-    public ResponseEntity<Subscriber> createSubscriber(
+    public ResponseEntity<SubscriberResponse> createSubscriber(
             HttpServletRequest request,
-            @Valid @RequestBody Subscriber subscriber) {
+            @Valid @RequestBody SubscriberRequest subscriberRequest) {
         String tenantId = TenantContext.getCurrentTenantId(request);
+        Subscriber entity = subscriberMapper.toEntity(subscriberRequest);
+        Subscriber saved = subscriberService.createSubscriber(tenantId, entity);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(subscriberService.createSubscriber(tenantId, subscriber));
+                .body(subscriberMapper.toResponse(saved));
     }
 
     @Operation(summary = "Get subscriber by IMSI")
     @GetMapping("/{imsi}")
-    public ResponseEntity<Subscriber> getSubscriber(
+    public ResponseEntity<SubscriberResponse> getSubscriber(
             HttpServletRequest request,
             @PathVariable String imsi) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(subscriberService.getSubscriber(tenantId, imsi));
+        return ResponseEntity.ok(subscriberMapper.toResponse(
+                subscriberService.getSubscriber(tenantId, imsi)));
     }
 
     @Operation(summary = "Update subscriber by IMSI")
     @PutMapping("/{imsi}")
-    public ResponseEntity<Subscriber> updateSubscriber(
+    public ResponseEntity<SubscriberResponse> updateSubscriber(
             HttpServletRequest request,
             @PathVariable String imsi,
-            @Valid @RequestBody Subscriber subscriber) {
+            @Valid @RequestBody SubscriberRequest subscriberRequest) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(subscriberService.updateSubscriber(tenantId, imsi, subscriber));
+        Subscriber entity = subscriberMapper.toEntity(subscriberRequest);
+        return ResponseEntity.ok(subscriberMapper.toResponse(
+                subscriberService.updateSubscriber(tenantId, imsi, entity)));
     }
 
     @Operation(summary = "Delete subscriber by IMSI")
@@ -119,7 +130,7 @@ public class SubscriberController {
 
     @Operation(summary = "List subscribers with pagination (use GET /{imsi} for exact IMSI lookup)")
     @GetMapping("/list")
-    public ResponseEntity<Page<Subscriber>> listSubscribers(
+    public ResponseEntity<Page<SubscriberResponse>> listSubscribers(
             HttpServletRequest request,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -127,19 +138,21 @@ public class SubscriberController {
             @RequestParam(defaultValue = "DESC") Sort.Direction sortDir) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortDir, sortBy));
-        return ResponseEntity.ok(subscriberService.getAllSubscribersPaged(tenantId, pageable));
+        return ResponseEntity.ok(subscriberService.getAllSubscribersPaged(tenantId, pageable)
+                .map(subscriberMapper::toResponse));
     }
 
     @Operation(summary = "Search subscribers by label (text), IMSI (15 digits exact), or MSISDN (10-15 digits exact)")
     @GetMapping("/search")
-    public ResponseEntity<Page<Subscriber>> searchSubscribers(
+    public ResponseEntity<Page<SubscriberResponse>> searchSubscribers(
             HttpServletRequest request,
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         Pageable pageable = PageRequest.of(page, size);
-        return ResponseEntity.ok(subscriberService.searchSubscribers(tenantId, q, pageable));
+        return ResponseEntity.ok(subscriberService.searchSubscribers(tenantId, q, pageable)
+                .map(subscriberMapper::toResponse));
     }
 
     @Operation(summary = "Get total subscriber count")

@@ -11,7 +11,7 @@ import com.opticoms.optinmscore.domain.observability.service.AlarmService;
 import com.opticoms.optinmscore.domain.performance.model.PmMetric;
 import com.opticoms.optinmscore.domain.performance.service.PmService;
 import com.opticoms.optinmscore.domain.tenant.model.Tenant;
-import com.opticoms.optinmscore.domain.tenant.repository.TenantRepository;
+import com.opticoms.optinmscore.domain.tenant.service.TenantService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -20,10 +20,13 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Scheduled task that syncs data from Open5GS InfoAPI every 30 seconds.
@@ -46,13 +49,13 @@ public class Open5gsSyncScheduler {
     private final ConnectedUeRepository connectedUeRepository;
     private final PduSessionRepository pduSessionRepository;
     private final AlarmService alarmService;
-    private final TenantRepository tenantRepository;
+    private final TenantService tenantService;
     private final PmService pmService;
 
     @Scheduled(fixedRateString = "${open5gs.sync.interval-ms:30000}")
-    @SchedulerLock(name = "open5gs_sync", lockAtMostFor = "28s", lockAtLeastFor = "10s")
+    @SchedulerLock(name = "open5gs_sync", lockAtMostFor = "55s", lockAtLeastFor = "10s")
     public void syncFromOpen5gs() {
-        List<Tenant> tenants = tenantRepository.findByActiveTrue();
+        List<Tenant> tenants = tenantService.getActiveTenants();
         if (tenants.isEmpty()) {
             log.debug("No active tenants found, skipping sync");
             return;
@@ -75,21 +78,26 @@ public class Open5gsSyncScheduler {
     @SuppressWarnings("unchecked")
     private void syncGnbInfo(String tenantId, String amfUrl) {
         List<Map<String, Object>> gnbList = open5gsClient.fetchGnbInfo(amfUrl);
+
+        Map<String, GNodeB> existingMap = gNodeBRepository.findByTenantId(tenantId).stream()
+                .collect(Collectors.toMap(GNodeB::getGnbId, Function.identity(), (a, b) -> a));
+
         if (gnbList.isEmpty()) {
             log.debug("No gNB data received from AMF InfoAPI for tenant {}", tenantId);
-            markStaleGnbsDisconnected(tenantId, Collections.emptySet());
+            List<GNodeB> stale = markStaleGnbsDisconnected(existingMap, Collections.emptySet());
+            if (!stale.isEmpty()) gNodeBRepository.saveAll(stale);
             return;
         }
 
         Set<String> syncedGnbIds = new HashSet<>();
+        List<GNodeB> toSave = new ArrayList<>();
         for (Map<String, Object> gnbData : gnbList) {
             try {
                 String gnbId = extractString(gnbData, "gnb_id");
                 if (gnbId == null) continue;
                 syncedGnbIds.add(gnbId);
 
-                GNodeB gnb = gNodeBRepository.findByTenantIdAndGnbId(tenantId, gnbId)
-                        .orElseGet(GNodeB::new);
+                GNodeB gnb = existingMap.getOrDefault(gnbId, new GNodeB());
 
                 gnb.setTenantId(tenantId);
                 gnb.setGnbId(gnbId);
@@ -156,26 +164,33 @@ public class Open5gsSyncScheduler {
                     gnb.setConnectedUeCount(((Number) ueCount).intValue());
                 }
 
-                gNodeBRepository.save(gnb);
+                toSave.add(gnb);
             } catch (Exception e) {
                 log.warn("Failed to process gNB data for tenant {}: {}", tenantId, e.getMessage());
             }
         }
 
-        markStaleGnbsDisconnected(tenantId, syncedGnbIds);
+        markStaleGnbsDisconnected(existingMap, syncedGnbIds).forEach(toSave::add);
+        gNodeBRepository.saveAll(toSave);
         log.debug("Synced {} gNodeBs for tenant {}", gnbList.size(), tenantId);
     }
 
     @SuppressWarnings("unchecked")
     private void syncUeInfo(String tenantId, String amfUrl) {
         List<Map<String, Object>> ueList = open5gsClient.fetchUeInfo(amfUrl);
+
+        Map<String, ConnectedUe> existingMap = connectedUeRepository.findByTenantId(tenantId).stream()
+                .collect(Collectors.toMap(ConnectedUe::getImsi, Function.identity(), (a, b) -> a));
+
         if (ueList.isEmpty()) {
             log.debug("No UE data received from AMF InfoAPI for tenant {}", tenantId);
-            markStaleUesDisconnected(tenantId, Collections.emptySet());
+            List<ConnectedUe> stale = markStaleUesDisconnected(existingMap, Collections.emptySet());
+            if (!stale.isEmpty()) connectedUeRepository.saveAll(stale);
             return;
         }
 
         Set<String> syncedImsis = new HashSet<>();
+        List<ConnectedUe> toSave = new ArrayList<>();
         for (Map<String, Object> ueData : ueList) {
             try {
                 String supi = extractString(ueData, "supi");
@@ -183,8 +198,7 @@ public class Open5gsSyncScheduler {
                 String imsi = supi.startsWith("imsi-") ? supi.substring(5) : supi;
                 syncedImsis.add(imsi);
 
-                ConnectedUe ue = connectedUeRepository.findByTenantIdAndImsi(tenantId, imsi)
-                        .orElseGet(ConnectedUe::new);
+                ConnectedUe ue = existingMap.getOrDefault(imsi, new ConnectedUe());
 
                 ue.setTenantId(tenantId);
                 ue.setImsi(imsi);
@@ -212,26 +226,33 @@ public class Open5gsSyncScheduler {
                 }
 
                 ue.setLastSeenAt(System.currentTimeMillis());
-                connectedUeRepository.save(ue);
+                toSave.add(ue);
             } catch (Exception e) {
                 log.warn("Failed to process UE data for tenant {}: {}", tenantId, e.getMessage());
             }
         }
 
-        markStaleUesDisconnected(tenantId, syncedImsis);
+        markStaleUesDisconnected(existingMap, syncedImsis).forEach(toSave::add);
+        connectedUeRepository.saveAll(toSave);
         log.debug("Synced {} connected UEs for tenant {}", ueList.size(), tenantId);
     }
 
     @SuppressWarnings("unchecked")
     private void syncPduInfo(String tenantId, String smfUrl) {
         List<Map<String, Object>> pduList = open5gsClient.fetchPduInfo(smfUrl);
+
+        Map<String, PduSession> existingMap = pduSessionRepository.findByTenantId(tenantId).stream()
+                .collect(Collectors.toMap(PduSession::getSessionId, Function.identity(), (a, b) -> a));
+
         if (pduList.isEmpty()) {
             log.debug("No PDU session data received from SMF InfoAPI for tenant {}", tenantId);
-            markStalePduSessionsReleased(tenantId, Collections.emptySet());
+            List<PduSession> stale = markStalePduSessionsReleased(existingMap, Collections.emptySet());
+            if (!stale.isEmpty()) pduSessionRepository.saveAll(stale);
             return;
         }
 
         Set<String> syncedSessionIds = new HashSet<>();
+        List<PduSession> toSave = new ArrayList<>();
         for (Map<String, Object> ueEntry : pduList) {
             try {
                 String supi = extractString(ueEntry, "supi");
@@ -245,9 +266,7 @@ public class Open5gsSyncScheduler {
                     Object psiObj = pduData.get("psi");
                     String sessionId = imsi + "-psi-" + (psiObj != null ? psiObj : pduData.hashCode());
 
-                    PduSession session = pduSessionRepository
-                            .findByTenantIdAndSessionId(tenantId, sessionId)
-                            .orElseGet(PduSession::new);
+                    PduSession session = existingMap.getOrDefault(sessionId, new PduSession());
 
                     session.setTenantId(tenantId);
                     session.setSessionId(sessionId);
@@ -271,7 +290,7 @@ public class Open5gsSyncScheduler {
                             : PduSession.SessionStatus.RELEASED);
 
                     session.setLastSeenAt(System.currentTimeMillis());
-                    pduSessionRepository.save(session);
+                    toSave.add(session);
                     syncedSessionIds.add(sessionId);
                 }
             } catch (Exception e) {
@@ -279,45 +298,49 @@ public class Open5gsSyncScheduler {
             }
         }
 
-        markStalePduSessionsReleased(tenantId, syncedSessionIds);
+        markStalePduSessionsReleased(existingMap, syncedSessionIds).forEach(toSave::add);
+        pduSessionRepository.saveAll(toSave);
         log.debug("Synced PDU sessions from {} UE entries for tenant {}", pduList.size(), tenantId);
     }
 
-    private void markStaleGnbsDisconnected(String tenantId, Set<String> activeGnbIds) {
-        List<GNodeB> allGnbs = gNodeBRepository.findByTenantId(tenantId);
-        for (GNodeB gnb : allGnbs) {
+    private List<GNodeB> markStaleGnbsDisconnected(Map<String, GNodeB> existingMap, Set<String> activeGnbIds) {
+        List<GNodeB> stale = new ArrayList<>();
+        for (GNodeB gnb : existingMap.values()) {
             if (gnb.getStatus() == GNodeB.ConnectionStatus.CONNECTED
                     && !activeGnbIds.contains(gnb.getGnbId())) {
                 gnb.setStatus(GNodeB.ConnectionStatus.DISCONNECTED);
                 gnb.setConnectedUeCount(0);
-                gNodeBRepository.save(gnb);
-                log.info("Marked gNB {} as DISCONNECTED for tenant {}", gnb.getGnbId(), tenantId);
+                stale.add(gnb);
+                log.info("Marked gNB {} as DISCONNECTED for tenant {}", gnb.getGnbId(), gnb.getTenantId());
             }
         }
+        return stale;
     }
 
-    private void markStaleUesDisconnected(String tenantId, Set<String> activeImsis) {
-        List<ConnectedUe> allUes = connectedUeRepository.findByTenantId(tenantId);
-        for (ConnectedUe ue : allUes) {
+    private List<ConnectedUe> markStaleUesDisconnected(Map<String, ConnectedUe> existingMap, Set<String> activeImsis) {
+        List<ConnectedUe> stale = new ArrayList<>();
+        for (ConnectedUe ue : existingMap.values()) {
             if (ue.getStatus() != ConnectedUe.UeStatus.DISCONNECTED
                     && !activeImsis.contains(ue.getImsi())) {
                 ue.setStatus(ConnectedUe.UeStatus.DISCONNECTED);
-                connectedUeRepository.save(ue);
-                log.info("Marked UE {} as DISCONNECTED for tenant {}", ue.getImsi(), tenantId);
+                stale.add(ue);
+                log.info("Marked UE {} as DISCONNECTED for tenant {}", ue.getImsi(), ue.getTenantId());
             }
         }
+        return stale;
     }
 
-    private void markStalePduSessionsReleased(String tenantId, Set<String> activeSessionIds) {
-        List<PduSession> allSessions = pduSessionRepository.findByTenantId(tenantId);
-        for (PduSession session : allSessions) {
+    private List<PduSession> markStalePduSessionsReleased(Map<String, PduSession> existingMap, Set<String> activeSessionIds) {
+        List<PduSession> stale = new ArrayList<>();
+        for (PduSession session : existingMap.values()) {
             if (session.getStatus() == PduSession.SessionStatus.ACTIVE
                     && !activeSessionIds.contains(session.getSessionId())) {
                 session.setStatus(PduSession.SessionStatus.RELEASED);
-                pduSessionRepository.save(session);
-                log.info("Marked PDU session {} as RELEASED for tenant {}", session.getSessionId(), tenantId);
+                stale.add(session);
+                log.info("Marked PDU session {} as RELEASED for tenant {}", session.getSessionId(), session.getTenantId());
             }
         }
+        return stale;
     }
 
     private void recordConnectedUeCount(String tenantId) {

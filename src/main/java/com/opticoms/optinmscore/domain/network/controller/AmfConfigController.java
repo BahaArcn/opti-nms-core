@@ -1,12 +1,14 @@
 package com.opticoms.optinmscore.domain.network.controller;
 
-import com.opticoms.optinmscore.domain.network.model.AmfConfig;
+import com.opticoms.optinmscore.common.util.TenantContext;
+import com.opticoms.optinmscore.domain.network.dto.AmfConfigRequest;
+import com.opticoms.optinmscore.domain.network.dto.AmfConfigResponse;
+import com.opticoms.optinmscore.domain.network.mapper.NetworkConfigMapper;
 import com.opticoms.optinmscore.domain.network.service.AmfConfigService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import com.opticoms.optinmscore.common.util.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,20 +20,22 @@ import org.springframework.web.bind.annotation.*;
 public class AmfConfigController {
 
     private final AmfConfigService amfConfigService;
+    private final NetworkConfigMapper networkConfigMapper;
 
     @Operation(summary = "Get AMF configuration for the tenant")
     @GetMapping
-    public ResponseEntity<AmfConfig> getAmfConfig(HttpServletRequest request) {
+    public ResponseEntity<AmfConfigResponse> getAmfConfig(HttpServletRequest request) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(amfConfigService.getAmfConfig(tenantId));
+        return ResponseEntity.ok(networkConfigMapper.toAmfConfigResponse(amfConfigService.getAmfConfig(tenantId)));
     }
 
     @Operation(summary = "Create or update AMF configuration")
     @PutMapping
-    public ResponseEntity<AmfConfig> saveOrUpdateAmfConfig(
+    public ResponseEntity<AmfConfigResponse> saveOrUpdateAmfConfig(
             HttpServletRequest request,
-            @Valid @RequestBody AmfConfig config) {
+            @Valid @RequestBody AmfConfigRequest config) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(amfConfigService.saveOrUpdateAmfConfig(tenantId, config));
+        return ResponseEntity.ok(networkConfigMapper.toAmfConfigResponse(
+                amfConfigService.saveOrUpdateAmfConfig(tenantId, networkConfigMapper.toAmfConfigEntity(config))));
     }
 }

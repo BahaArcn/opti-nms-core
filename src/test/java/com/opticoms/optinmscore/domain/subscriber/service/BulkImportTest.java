@@ -1,14 +1,9 @@
 package com.opticoms.optinmscore.domain.subscriber.service;
 
-import com.opticoms.optinmscore.domain.apn.repository.ApnProfileRepository;
-import com.opticoms.optinmscore.domain.inventory.repository.ConnectedUeRepository;
 import com.opticoms.optinmscore.domain.license.service.LicenseService;
-import com.opticoms.optinmscore.domain.policy.service.PolicyService;
 import com.opticoms.optinmscore.domain.subscriber.model.BulkImportResult;
 import com.opticoms.optinmscore.domain.subscriber.model.Subscriber;
 import com.opticoms.optinmscore.domain.subscriber.repository.SubscriberRepository;
-import com.opticoms.optinmscore.domain.tenant.model.Tenant;
-import com.opticoms.optinmscore.domain.tenant.repository.TenantRepository;
 import com.opticoms.optinmscore.integration.open5gs.Open5gsProvisioningService;
 import com.opticoms.optinmscore.security.encryption.EncryptionService;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,7 +16,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -37,20 +31,16 @@ class BulkImportTest {
     @Mock private SubscriberRepository subscriberRepository;
     @Mock private EncryptionService encryptionService;
     @Mock private Open5gsProvisioningService open5gsProvisioning;
-    @Mock private TenantRepository tenantRepository;
-    @Mock private ConnectedUeRepository connectedUeRepository;
-    @Mock private PolicyService policyService;
     @Mock private LicenseService licenseService;
-    @Mock private ApnProfileRepository apnProfileRepository;
+    @Mock private SubscriberHelper subscriberHelper;
 
     @InjectMocks
-    private SubscriberService service;
+    private BulkImportService service;
 
     @BeforeEach
     void setUp() {
         lenient().when(encryptionService.hash(anyString())).thenAnswer(inv -> "hash-" + inv.getArgument(0));
         lenient().when(encryptionService.encrypt(anyString())).thenReturn("encrypted");
-        lenient().when(tenantRepository.findByTenantId(TENANT)).thenReturn(Optional.of(buildTenant()));
         lenient().when(open5gsProvisioning.provisionSubscribersBulk(anyList(), any()))
                 .thenAnswer(inv -> {
                     List<?> subs = inv.getArgument(0);
@@ -60,6 +50,11 @@ class BulkImportTest {
         lenient().when(subscriberRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(subscriberRepository.findByTenantIdAndImsiHashIn(eq(TENANT), anyCollection()))
                 .thenReturn(List.of());
+
+        lenient().doNothing().when(subscriberHelper).validateKeys(any());
+        lenient().doNothing().when(subscriberHelper).enrichProfilesFromApn(any(), any());
+        lenient().when(subscriberHelper.resolveOpen5gsUri(any())).thenReturn("mongodb://localhost:27018/open5gs");
+        lenient().doNothing().when(subscriberHelper).encryptSensitiveData(any());
     }
 
     @Test
@@ -155,6 +150,10 @@ class BulkImportTest {
         List<Subscriber> parsed = buildSubscribers(2);
         parsed.get(0).setKi("SHORT");
 
+        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                "Ki must be exactly 16 bytes (32 hex chars)"))
+                .when(subscriberHelper).validateKeys(argThat(s -> "SHORT".equals(s.getKi())));
+
         BulkImportResult result = service.bulkImport(TENANT, parsed);
 
         assertEquals(2, result.getTotalInFile());
@@ -245,13 +244,5 @@ class BulkImportTest {
             list.add(s);
         }
         return list;
-    }
-
-    private Tenant buildTenant() {
-        Tenant t = new Tenant();
-        t.setTenantId(TENANT);
-        t.setName("Test Tenant");
-        t.setOpen5gsMongoUri("mongodb://localhost:27018/open5gs");
-        return t;
     }
 }

@@ -60,7 +60,7 @@ class MasterTokenFilterTest {
 
     @Test
     void anyToken_nonSlavePath_chainsThrough() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/subscriber/list");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/subscribers/list");
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 

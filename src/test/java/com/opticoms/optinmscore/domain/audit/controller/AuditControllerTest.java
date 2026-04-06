@@ -1,11 +1,14 @@
 package com.opticoms.optinmscore.domain.audit.controller;
 
+import com.opticoms.optinmscore.domain.audit.dto.AuditLogResponse;
+import com.opticoms.optinmscore.domain.audit.mapper.AuditLogMapper;
 import com.opticoms.optinmscore.domain.audit.model.AuditLog;
 import com.opticoms.optinmscore.domain.audit.model.AuditLog.AuditAction;
 import com.opticoms.optinmscore.domain.audit.model.AuditLog.AuditOutcome;
 import com.opticoms.optinmscore.domain.audit.service.AuditService;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
 import com.opticoms.optinmscore.security.JwtService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +46,27 @@ class AuditControllerTest {
 
     @MockBean
     private CustomUserDetailsService customUserDetailsService;
+
+    @MockBean
+    private AuditLogMapper auditLogMapper;
+
+    @BeforeEach
+    void setUp() {
+        when(auditLogMapper.toResponse(any(AuditLog.class))).thenAnswer(inv -> {
+            AuditLog e = inv.getArgument(0);
+            AuditLogResponse r = new AuditLogResponse();
+            r.setId(e.getId());
+            r.setUserId(e.getUserId());
+            r.setUsername(e.getUsername());
+            r.setAction(e.getAction());
+            r.setEntityType(e.getEntityType());
+            r.setEntityId(e.getEntityId());
+            r.setDescription(e.getDescription());
+            r.setOutcome(e.getOutcome());
+            r.setTimestamp(e.getTimestamp());
+            return r;
+        });
+    }
 
     private AuditLog buildLog() {
         AuditLog log = new AuditLog();

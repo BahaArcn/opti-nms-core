@@ -28,7 +28,9 @@ public class DataInitializer implements CommandLineRunner {
                 password = defaultAdminPassword;
             } else {
                 password = java.util.UUID.randomUUID().toString();
-                log.warn("DEFAULT_ADMIN_PASSWORD env var not set. Generated random password: {}", password);
+                log.warn("DEFAULT_ADMIN_PASSWORD env var not set. "
+                       + "A random password was generated. "
+                       + "Use the reset-password API to set a known password.");
             }
 
             User admin = new User();
@@ -37,6 +39,7 @@ public class DataInitializer implements CommandLineRunner {
             admin.setEmail("admin@opticoms.com");
             admin.setRole(User.Role.SUPER_ADMIN);
             admin.setActive(true);
+            admin.setSystemProtected(true);
             admin.setTenantId("PLAT-0000/0000/00");
 
             userRepository.save(admin);

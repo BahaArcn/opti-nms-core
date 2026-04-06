@@ -9,6 +9,7 @@ import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.util.Date;
 import java.util.Map;
 
 @Data
@@ -28,6 +29,9 @@ public class PmMetric extends BaseEntity {
     private Long timestamp = System.currentTimeMillis();
 
     private Map<String, String> labels;
+
+    @Indexed(expireAfterSeconds = 0)
+    private Date expiresAt;
 
     private MetricType metricType;
 

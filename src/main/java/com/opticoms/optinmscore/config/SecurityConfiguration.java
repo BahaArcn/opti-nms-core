@@ -3,6 +3,7 @@ package com.opticoms.optinmscore.config;
 import com.opticoms.optinmscore.config.ratelimit.RateLimiter;
 import com.opticoms.optinmscore.config.ratelimit.RateLimitProperties;
 import com.opticoms.optinmscore.config.ratelimit.RateLimitingFilter;
+import com.opticoms.optinmscore.config.security.MasterTokenFilter;
 import com.opticoms.optinmscore.security.JwtAuthenticationFilter;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -37,6 +39,7 @@ import java.util.List;
 public class SecurityConfiguration {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
+    private final MasterTokenFilter masterTokenFilter;
     private final RateLimiter rateLimiter;
     private final RateLimitProperties rateLimitProperties;
     private final CustomUserDetailsService userDetailsService;
@@ -49,6 +52,15 @@ public class SecurityConfiguration {
         http
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.deny())
+                        .contentTypeOptions(Customizer.withDefaults())
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31536000))
+                        .referrerPolicy(referrer -> referrer
+                                .policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                )
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints
                         .requestMatchers(
@@ -59,14 +71,15 @@ public class SecurityConfiguration {
                                 "/swagger-ui.html",
                                 "/webjars/**",
                                 "/actuator/health",
-                                "/actuator/info"
+                                "/actuator/info",
+                                "/actuator/prometheus"
                         ).permitAll()
 
                         // Subscriber management: ADMIN only for write, all roles for read
-                        .requestMatchers(HttpMethod.POST, "/api/v1/subscriber/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/subscriber/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/subscriber/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/subscriber/**").hasAnyRole("ADMIN", "OPERATOR", "VIEWER")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/subscribers/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/subscribers/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/subscribers/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/subscribers/**").hasAnyRole("ADMIN", "OPERATOR", "VIEWER")
 
                         // Network configuration: ADMIN only for write, all roles for read
                         .requestMatchers(HttpMethod.PUT, "/api/v1/network/**").hasRole("ADMIN")
@@ -101,14 +114,14 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/api/v1/suci/**").hasAnyRole("ADMIN", "OPERATOR")
 
                         // Certificate management: ADMIN for write, ADMIN+OPERATOR for read
-                        // (private key icerdigi icin VIEWER okuyamaz — SUCI ile ayni pattern)
+                        // (contains private key material; VIEWER cannot read — same pattern as SUCI)
                         .requestMatchers(HttpMethod.POST, "/api/v1/certificates/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/certificates/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/certificates/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/certificates/**").hasAnyRole("ADMIN", "OPERATOR")
 
                         // APN/DNN profile management: ADMIN for write, all roles for read
-                        // (hassas veri degil, network config — subscriber pattern ile ayni)
+                        // (not highly sensitive; same read pattern as subscriber-facing network config)
                         .requestMatchers(HttpMethod.POST, "/api/v1/apn/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/apn/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/apn/**").hasRole("ADMIN")
@@ -135,22 +148,25 @@ public class SecurityConfiguration {
                         // Open5GS deploy: ADMIN only (K8s deploy + rollout restart)
                         .requestMatchers("/api/v1/open5gs/**").hasRole("ADMIN")
 
-                        // Inventory: all authenticated users
-                        .requestMatchers("/api/v1/inventory/**").authenticated()
+                        // Inventory: write operations require ADMIN/OPERATOR, read for all authenticated
+                        .requestMatchers(HttpMethod.POST, "/api/v1/inventory/**").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/inventory/**").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/inventory/**").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/inventory/**").authenticated()
 
-                        // Master endpoints: ADMIN only
+                        // Inter-node communication: MasterTokenFilter validates X-Master-Token
+                        .requestMatchers(HttpMethod.POST, "/api/v1/master/slaves/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/master/slaves/heartbeat").permitAll()
+                        // Admin-initiated master operations: JWT ADMIN required
                         .requestMatchers("/api/v1/master/**").hasRole("ADMIN")
 
-                        // Slave endpoints: MasterTokenFilter tarafindan korunuyor, JWT bypass
+                        // Slave endpoints: MasterTokenFilter validates X-Master-Token
                         .requestMatchers("/api/v1/slave/**").permitAll()
 
-                        // Tenant management: SUPER_ADMIN only
-                        .requestMatchers("/api/v1/system/tenants/**").hasRole("SUPER_ADMIN")
-
-                        // System endpoints: SUPER_ADMIN only
+                        // System endpoints (tenants, licenses, updates): SUPER_ADMIN only
                         .requestMatchers("/api/v1/system/**").hasRole("SUPER_ADMIN")
 
-                        // Audit logs: ADMIN only (hassas guvenlik verisi)
+                        // Audit logs: ADMIN only (security-sensitive)
                         .requestMatchers("/api/v1/audit/**").hasRole("ADMIN")
 
                         // Actuator (except health/info): ADMIN only
@@ -160,6 +176,7 @@ public class SecurityConfiguration {
                 )
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authenticationProvider())
+                .addFilterBefore(masterTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(new RateLimitingFilter(rateLimiter, rateLimitProperties), JwtAuthenticationFilter.class);
 

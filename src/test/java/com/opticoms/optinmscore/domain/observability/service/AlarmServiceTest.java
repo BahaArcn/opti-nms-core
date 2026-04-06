@@ -13,6 +13,11 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.server.ResponseStatusException;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -124,43 +129,51 @@ class AlarmServiceTest {
 
     @Test
     void getAlarms_noFilters_returnsAll() {
-        List<Alarm> expected = List.of(alarm);
-        when(alarmRepository.findByTenantIdOrderByEventTimeDesc(TENANT)).thenReturn(expected);
+        Pageable pageable = PageRequest.of(0, 20);
+        Page<Alarm> expected = new PageImpl<>(List.of(alarm), pageable, 1);
+        when(alarmRepository.findByTenantIdOrderByEventTimeDesc(TENANT, pageable)).thenReturn(expected);
 
-        List<Alarm> result = service.getAlarms(TENANT, null, null);
+        Page<Alarm> result = service.getAlarms(TENANT, null, null, pageable);
 
-        assertEquals(expected, result);
+        assertEquals(1, result.getTotalElements());
+        assertEquals(alarm, result.getContent().get(0));
     }
 
     @Test
     void getAlarms_severityFilter() {
-        when(alarmRepository.findByTenantIdAndSeverityOrderByEventTimeDesc(TENANT, Alarm.Severity.CRITICAL))
-                .thenReturn(List.of(alarm));
+        Pageable pageable = PageRequest.of(0, 20);
+        Page<Alarm> expected = new PageImpl<>(List.of(alarm), pageable, 1);
+        when(alarmRepository.findByTenantIdAndSeverityOrderByEventTimeDesc(TENANT, Alarm.Severity.CRITICAL, pageable))
+                .thenReturn(expected);
 
-        List<Alarm> result = service.getAlarms(TENANT, Alarm.Severity.CRITICAL, null);
+        Page<Alarm> result = service.getAlarms(TENANT, Alarm.Severity.CRITICAL, null, pageable);
 
-        assertEquals(1, result.size());
+        assertEquals(1, result.getTotalElements());
     }
 
     @Test
     void getAlarms_statusFilter() {
-        when(alarmRepository.findByTenantIdAndStatusOrderByEventTimeDesc(TENANT, Alarm.AlarmStatus.ACTIVE))
-                .thenReturn(List.of(alarm));
+        Pageable pageable = PageRequest.of(0, 20);
+        Page<Alarm> expected = new PageImpl<>(List.of(alarm), pageable, 1);
+        when(alarmRepository.findByTenantIdAndStatusOrderByEventTimeDesc(TENANT, Alarm.AlarmStatus.ACTIVE, pageable))
+                .thenReturn(expected);
 
-        List<Alarm> result = service.getAlarms(TENANT, null, Alarm.AlarmStatus.ACTIVE);
+        Page<Alarm> result = service.getAlarms(TENANT, null, Alarm.AlarmStatus.ACTIVE, pageable);
 
-        assertEquals(1, result.size());
+        assertEquals(1, result.getTotalElements());
     }
 
     @Test
     void getAlarms_bothFilters() {
+        Pageable pageable = PageRequest.of(0, 20);
+        Page<Alarm> expected = new PageImpl<>(List.of(alarm), pageable, 1);
         when(alarmRepository.findByTenantIdAndSeverityAndStatusOrderByEventTimeDesc(
-                TENANT, Alarm.Severity.CRITICAL, Alarm.AlarmStatus.ACTIVE))
-                .thenReturn(List.of(alarm));
+                TENANT, Alarm.Severity.CRITICAL, Alarm.AlarmStatus.ACTIVE, pageable))
+                .thenReturn(expected);
 
-        List<Alarm> result = service.getAlarms(TENANT, Alarm.Severity.CRITICAL, Alarm.AlarmStatus.ACTIVE);
+        Page<Alarm> result = service.getAlarms(TENANT, Alarm.Severity.CRITICAL, Alarm.AlarmStatus.ACTIVE, pageable);
 
-        assertEquals(1, result.size());
+        assertEquals(1, result.getTotalElements());
     }
 
     @Test

@@ -1,10 +1,13 @@
 package com.opticoms.optinmscore.domain.suci.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opticoms.optinmscore.domain.suci.dto.SuciProfileResponse;
+import com.opticoms.optinmscore.domain.suci.mapper.SuciProfileMapper;
 import com.opticoms.optinmscore.domain.suci.model.SuciProfile;
 import com.opticoms.optinmscore.domain.suci.service.SuciProfileService;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
 import com.opticoms.optinmscore.security.JwtService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -37,6 +40,36 @@ class SuciProfileControllerTest {
     @MockBean private SuciProfileService suciProfileService;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
+    @MockBean private SuciProfileMapper suciProfileMapper;
+
+    @BeforeEach
+    void setUpMapperStubs() {
+        when(suciProfileMapper.toEntity(any())).thenReturn(new SuciProfile());
+        when(suciProfileMapper.toResponse(any())).thenAnswer(inv -> {
+            SuciProfile e = inv.getArgument(0);
+            if (e == null) return null;
+            SuciProfileResponse r = new SuciProfileResponse();
+            r.setId(e.getId());
+            r.setProtectionScheme(e.getProtectionScheme());
+            r.setHomeNetworkPublicKeyId(e.getHomeNetworkPublicKeyId());
+            r.setHomeNetworkPublicKey(e.getHomeNetworkPublicKey());
+            r.setKeyStatus(e.getKeyStatus());
+            r.setDescription(e.getDescription());
+            return r;
+        });
+        when(suciProfileMapper.toResponseList(any())).thenAnswer(inv -> {
+            List<SuciProfile> entities = inv.getArgument(0);
+            return entities.stream().map(e -> {
+                SuciProfileResponse r = new SuciProfileResponse();
+                r.setId(e.getId());
+                r.setProtectionScheme(e.getProtectionScheme());
+                r.setHomeNetworkPublicKeyId(e.getHomeNetworkPublicKeyId());
+                r.setKeyStatus(e.getKeyStatus());
+                r.setDescription(e.getDescription());
+                return r;
+            }).toList();
+        });
+    }
 
     @Test
     @WithMockUser(roles = "ADMIN")

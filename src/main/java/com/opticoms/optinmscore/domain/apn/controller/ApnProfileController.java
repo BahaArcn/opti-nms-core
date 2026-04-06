@@ -1,6 +1,9 @@
 package com.opticoms.optinmscore.domain.apn.controller;
 
 import com.opticoms.optinmscore.common.util.TenantContext;
+import com.opticoms.optinmscore.domain.apn.dto.ApnProfileRequest;
+import com.opticoms.optinmscore.domain.apn.dto.ApnProfileResponse;
+import com.opticoms.optinmscore.domain.apn.mapper.ApnProfileMapper;
 import com.opticoms.optinmscore.domain.apn.model.ApnProfile;
 import com.opticoms.optinmscore.domain.apn.service.ApnProfileService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,15 +29,17 @@ import java.util.List;
 public class ApnProfileController {
 
     private final ApnProfileService apnProfileService;
+    private final ApnProfileMapper apnProfileMapper;
 
     @Operation(summary = "Create a new APN/DNN profile (ADMIN only)")
     @PostMapping
-    public ResponseEntity<ApnProfile> create(
+    public ResponseEntity<ApnProfileResponse> create(
             HttpServletRequest request,
-            @Valid @RequestBody ApnProfile profile) {
+            @Valid @RequestBody ApnProfileRequest profileRequest) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(apnProfileService.create(tenantId, profile));
+                .body(apnProfileMapper.toResponse(
+                        apnProfileService.create(tenantId, apnProfileMapper.toEntity(profileRequest))));
     }
 
     @Operation(summary = "List APN/DNN profiles with pagination")
@@ -48,47 +53,53 @@ public class ApnProfileController {
             @RequestParam(defaultValue = "ASC") Sort.Direction sortDir) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         if (Boolean.TRUE.equals(enabled)) {
-            return ResponseEntity.ok(apnProfileService.listEnabled(tenantId));
+            return ResponseEntity.ok(apnProfileMapper.toResponseList(
+                    apnProfileService.listEnabled(tenantId)));
         }
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortDir, sortBy));
-        return ResponseEntity.ok(apnProfileService.list(tenantId, pageable));
+        return ResponseEntity.ok(apnProfileService.list(tenantId, pageable)
+                .map(apnProfileMapper::toResponse));
     }
 
     @Operation(summary = "Get APN/DNN profile by ID")
     @GetMapping("/{id}")
-    public ResponseEntity<ApnProfile> getById(
+    public ResponseEntity<ApnProfileResponse> getById(
             HttpServletRequest request,
             @PathVariable String id) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(apnProfileService.getById(tenantId, id));
+        return ResponseEntity.ok(apnProfileMapper.toResponse(
+                apnProfileService.getById(tenantId, id)));
     }
 
     @Operation(summary = "Filter profiles by SST (1=eMBB, 2=uRLLC, 3=MIoT, 4=V2X, 5=HMTC)")
     @GetMapping("/sst/{sst}")
-    public ResponseEntity<List<ApnProfile>> listBySst(
+    public ResponseEntity<List<ApnProfileResponse>> listBySst(
             HttpServletRequest request,
             @PathVariable Integer sst) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(apnProfileService.listBySst(tenantId, sst));
+        return ResponseEntity.ok(apnProfileMapper.toResponseList(
+                apnProfileService.listBySst(tenantId, sst)));
     }
 
     @Operation(summary = "Filter profiles by status (ACTIVE, INACTIVE, DEPRECATED)")
     @GetMapping("/status/{status}")
-    public ResponseEntity<List<ApnProfile>> listByStatus(
+    public ResponseEntity<List<ApnProfileResponse>> listByStatus(
             HttpServletRequest request,
             @PathVariable ApnProfile.ProfileStatus status) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(apnProfileService.listByStatus(tenantId, status));
+        return ResponseEntity.ok(apnProfileMapper.toResponseList(
+                apnProfileService.listByStatus(tenantId, status)));
     }
 
     @Operation(summary = "Update an APN/DNN profile (cannot update DEPRECATED)")
     @PutMapping("/{id}")
-    public ResponseEntity<ApnProfile> update(
+    public ResponseEntity<ApnProfileResponse> update(
             HttpServletRequest request,
             @PathVariable String id,
-            @Valid @RequestBody ApnProfile profile) {
+            @Valid @RequestBody ApnProfileRequest profileRequest) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(apnProfileService.update(tenantId, id, profile));
+        return ResponseEntity.ok(apnProfileMapper.toResponse(
+                apnProfileService.update(tenantId, id, apnProfileMapper.toEntity(profileRequest))));
     }
 
     @Operation(summary = "Delete an APN/DNN profile")
@@ -103,11 +114,12 @@ public class ApnProfileController {
 
     @Operation(summary = "Deprecate an APN/DNN profile (disables and marks deprecated)")
     @PostMapping("/{id}/deprecate")
-    public ResponseEntity<ApnProfile> deprecate(
+    public ResponseEntity<ApnProfileResponse> deprecate(
             HttpServletRequest request,
             @PathVariable String id) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(apnProfileService.deprecate(tenantId, id));
+        return ResponseEntity.ok(apnProfileMapper.toResponse(
+                apnProfileService.deprecate(tenantId, id)));
     }
 
     @Operation(summary = "Get total APN/DNN profile count")

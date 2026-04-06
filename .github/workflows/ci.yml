@@ -22,6 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Scan for secrets (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-java@v4
         with:
           java-version: '17'
@@ -34,6 +39,11 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
 
+      - name: Lint Helm chart
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          helm lint opti-nms-core/helm/
+
       - name: Run tests
         run: mvn test -B
 
@@ -43,6 +53,16 @@ jobs:
         with:
           name: jacoco-report
           path: target/site/jacoco/
+
+      - name: OWASP Dependency Check
+        run: mvn org.owasp:dependency-check-maven:check -B -DfailBuildOnCVSS=9 -DsuppressionFile=owasp-suppressions.xml
+
+      - name: Upload OWASP report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owasp-dependency-check
+          path: target/dependency-check-report.html
 
   build-and-push:
     needs: test
@@ -60,6 +80,13 @@ jobs:
             echo "available=false" >> $GITHUB_OUTPUT
             echo "::warning::Docker Hub credentials not configured. Skipping push."
           fi
+
+      - name: Extract version
+        id: version
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          DATE=$(date +'%Y.%m.%d')
+          echo "tag=${DATE}-${SHORT_SHA}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         if: steps.docker-creds.outputs.available == 'true'
@@ -79,5 +106,6 @@ jobs:
           context: .
           push: true
           tags: |
+            opticoms/optinms-core:${{ steps.version.outputs.tag }}
             opticoms/optinms-core:${{ github.sha }}
             opticoms/optinms-core:latest

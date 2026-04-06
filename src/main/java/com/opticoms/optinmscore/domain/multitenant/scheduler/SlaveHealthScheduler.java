@@ -21,7 +21,7 @@ public class SlaveHealthScheduler {
     private final MasterService masterService;
 
     @Scheduled(fixedDelay = 60000)
-    @SchedulerLock(name = "slave_health_check", lockAtMostFor = "55s", lockAtLeastFor = "20s")
+    @SchedulerLock(name = "slave_health_check", lockAtMostFor = "2m", lockAtLeastFor = "20s")
     public void markStaleSlaves() {
         Set<String> tenantIds = slaveNodeRepository.findAll().stream()
                 .map(SlaveNode::getTenantId)

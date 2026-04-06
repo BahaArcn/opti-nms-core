@@ -1,6 +1,9 @@
 package com.opticoms.optinmscore.config;
 
+import com.opticoms.optinmscore.config.security.MasterTokenFilter;
+import com.opticoms.optinmscore.config.security.MasterTokenFilterConfig;
 import com.opticoms.optinmscore.domain.system.controller.UserController;
+import com.opticoms.optinmscore.domain.system.mapper.UserMapper;
 import com.opticoms.optinmscore.domain.system.model.User;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
 import com.opticoms.optinmscore.domain.system.service.UserService;
@@ -33,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   GET → ADMIN, OPERATOR, VIEWER
  */
 @WebMvcTest(UserController.class)
-@Import({SecurityConfiguration.class, JwtAuthenticationFilter.class, RateLimitTestConfig.class})
+@Import({SecurityConfiguration.class, JwtAuthenticationFilter.class, RateLimitTestConfig.class, MasterTokenFilterConfig.class})
 class UserSecurityIntegrationTest {
 
     private static final String TENANT = "OPTC-0001/0001/01";
@@ -41,6 +44,7 @@ class UserSecurityIntegrationTest {
     @Autowired private MockMvc mockMvc;
 
     @MockBean private UserService userService;
+    @MockBean private UserMapper userMapper;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
 
@@ -195,20 +199,20 @@ class UserSecurityIntegrationTest {
         void viewer_canChangeOwnPassword() throws Exception {
             stubAuth("viewer-token", viewerUser);
 
-            mockMvc.perform(put("/api/v1/users/user-1/password")
+            mockMvc.perform(put("/api/v1/users/" + viewerUser.getId() + "/password")
                             .header("Authorization", "Bearer viewer-token")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"currentPassword\":\"oldPwd123\",\"newPassword\":\"newPwd123\"}"))
                     .andExpect(status().isOk());
 
-            verify(userService).changePassword(TENANT, "user-1", "oldPwd123", "newPwd123");
+            verify(userService).changePassword(TENANT, viewerUser.getId(), "oldPwd123", "newPwd123");
         }
 
         @Test
         void operator_canChangeOwnPassword() throws Exception {
             stubAuth("operator-token", operatorUser);
 
-            mockMvc.perform(put("/api/v1/users/user-1/password")
+            mockMvc.perform(put("/api/v1/users/" + operatorUser.getId() + "/password")
                             .header("Authorization", "Bearer operator-token")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"currentPassword\":\"oldPwd123\",\"newPassword\":\"newPwd123\"}"))

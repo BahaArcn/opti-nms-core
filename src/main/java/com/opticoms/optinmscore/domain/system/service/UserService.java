@@ -122,9 +122,9 @@ public class UserService {
     @Audited(action = AuditAction.DELETE, entityType = "User")
     public void deleteUser(String tenantId, String userId) {
         User user = getUserById(tenantId, userId);
-        if ("admin".equals(user.getUsername())) {
+        if (user.isSystemProtected()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Cannot delete the default admin user");
+                    "This system account cannot be deleted");
         }
         userRepository.delete(user);
         log.info("User deleted: {}", user.getUsername());

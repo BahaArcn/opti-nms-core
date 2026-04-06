@@ -7,12 +7,14 @@ import com.opticoms.optinmscore.domain.performance.repository.PmMetricRepository
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.bson.Document;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
+import java.util.Date;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +23,9 @@ public class PmService {
     private final PmMetricRepository pmMetricRepository;
     private final ConnectedUeRepository connectedUeRepository;
     private final MongoTemplate mongoTemplate;
+
+    @Value("${pm.metrics.retention-days:30}")
+    private int retentionDays;
 
     private static final Map<String, int[]> RANGE_MAP = Map.of(
             "5m",  new int[]{5, 1},
@@ -35,6 +40,8 @@ public class PmService {
         if (metric.getTimestamp() == null) {
             metric.setTimestamp(System.currentTimeMillis());
         }
+        long retentionMs = (long) retentionDays * 24 * 60 * 60 * 1000;
+        metric.setExpiresAt(new Date(metric.getTimestamp() + retentionMs));
         return pmMetricRepository.save(metric);
     }
 
@@ -53,42 +60,35 @@ public class PmService {
 
     /**
      * #27/#31: Total data transferred in the last N minutes (in GB).
-     * Calculates as delta between first and last samples of upf_rx_bytes + upf_tx_bytes.
+     * Only fetches the oldest and newest sample (2 queries per metric instead of loading all).
      */
     public Double getTotalDataGB(String tenantId, int minutes) {
         long endTime = System.currentTimeMillis();
         long startTime = endTime - ((long) minutes * 60 * 1000);
 
-        List<PmMetric> rxMetrics = pmMetricRepository
-                .findByTenantIdAndMetricNameAndTimestampBetweenOrderByTimestampDesc(
-                        tenantId, "upf_rx_bytes", startTime, endTime);
-        List<PmMetric> txMetrics = pmMetricRepository
-                .findByTenantIdAndMetricNameAndTimestampBetweenOrderByTimestampDesc(
-                        tenantId, "upf_tx_bytes", startTime, endTime);
-
-        double rxDelta = computeDelta(rxMetrics);
-        double txDelta = computeDelta(txMetrics);
+        double rxDelta = computeDeltaFromBounds(tenantId, "upf_rx_bytes", startTime, endTime);
+        double txDelta = computeDeltaFromBounds(tenantId, "upf_tx_bytes", startTime, endTime);
 
         return (rxDelta + txDelta) / (1024.0 * 1024.0 * 1024.0);
     }
 
     /**
-     * #30: Current throughput calculated from the two most recent upf_tx_bytes / upf_rx_bytes samples.
+     * #30: Current throughput from the two most recent samples (2 queries total, not full range).
      */
     public ThroughputResult getCurrentThroughput(String tenantId) {
         long endTime = System.currentTimeMillis();
         long startTime = endTime - (5L * 60 * 1000);
 
-        List<PmMetric> rxMetrics = pmMetricRepository
-                .findByTenantIdAndMetricNameAndTimestampBetweenOrderByTimestampDesc(
+        List<PmMetric> rxTop2 = pmMetricRepository
+                .findTop2ByTenantIdAndMetricNameAndTimestampBetweenOrderByTimestampDesc(
                         tenantId, "upf_rx_bytes", startTime, endTime);
-        List<PmMetric> txMetrics = pmMetricRepository
-                .findByTenantIdAndMetricNameAndTimestampBetweenOrderByTimestampDesc(
+        List<PmMetric> txTop2 = pmMetricRepository
+                .findTop2ByTenantIdAndMetricNameAndTimestampBetweenOrderByTimestampDesc(
                         tenantId, "upf_tx_bytes", startTime, endTime);
 
         ThroughputResult result = new ThroughputResult();
-        result.setUplinkBps(computeRate(txMetrics));
-        result.setDownlinkBps(computeRate(rxMetrics));
+        result.setUplinkBps(computeRate(txTop2));
+        result.setDownlinkBps(computeRate(rxTop2));
         result.setTimestamp(endTime);
         return result;
     }
@@ -206,14 +206,15 @@ public class PmService {
         return buckets;
     }
 
-    private double computeDelta(List<PmMetric> metrics) {
-        if (metrics == null || metrics.size() < 2) {
-            return 0.0;
-        }
-        double newest = metrics.get(0).getValue();
-        double oldest = metrics.get(metrics.size() - 1).getValue();
-        double delta = newest - oldest;
-        return Math.max(delta, 0.0);
+    private double computeDeltaFromBounds(String tenantId, String metricName, long startTime, long endTime) {
+        PmMetric newest = pmMetricRepository
+                .findFirstByTenantIdAndMetricNameAndTimestampBetweenOrderByTimestampDesc(
+                        tenantId, metricName, startTime, endTime);
+        PmMetric oldest = pmMetricRepository
+                .findFirstByTenantIdAndMetricNameAndTimestampBetweenOrderByTimestampAsc(
+                        tenantId, metricName, startTime, endTime);
+        if (newest == null || oldest == null) return 0.0;
+        return Math.max(newest.getValue() - oldest.getValue(), 0.0);
     }
 
     private double computeRate(List<PmMetric> metrics) {

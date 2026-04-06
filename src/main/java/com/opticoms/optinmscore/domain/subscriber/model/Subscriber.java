@@ -17,6 +17,7 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 @Document(collection = "subscribers")
 @CompoundIndex(name = "tenant_imsi_hash_idx", def = "{'tenantId': 1, 'imsiHash': 1}", unique = true)
+@CompoundIndex(name = "tenant_msisdn_hash_idx", def = "{'tenantId': 1, 'msisdnHash': 1}")
 public class Subscriber extends BaseEntity {
 
     @NotBlank
@@ -38,7 +39,7 @@ public class Subscriber extends BaseEntity {
     @Schema(description = "Human-readable display name for the subscriber (optional, not encrypted)", example = "Baha's Phone")
     private String label;
 
-    // --- Kriptografik Anahtarlar ---
+    // --- Cryptographic keys ---
 
     @NotBlank
     @Schema(description = "Authentication Key (Ki) - 32 hex chars (16 bytes)", example = "465B5CE8B199B49FAA5F0A2EE238A6BC")
@@ -54,14 +55,14 @@ public class Subscriber extends BaseEntity {
     @Schema(description = "Operator Code (OP) - required if usimType=OP, 32 hex chars", example = "")
     private String op;
 
-    // --- Hız Limitleri (AMBR) ---
+    // --- AMBR (aggregated max bit rate) ---
 
     @Min(0)
-    @Schema(description = "UE Downlink Hızı (bps)", example = "1000000000") // 1 Gbps
+    @Schema(description = "UE downlink rate (bps)", example = "1000000000")
     private long ueAmbrDl;
 
     @Min(0)
-    @Schema(description = "UE Uplink Hızı (bps)", example = "500000000") // 500 Mbps
+    @Schema(description = "UE uplink rate (bps)", example = "500000000")
     private long ueAmbrUl;
 
     // --- SIM Type ---
@@ -74,10 +75,10 @@ public class Subscriber extends BaseEntity {
     private String sqn;
 
     // --- Roaming ---
-    @Schema(description = "Roaming İzni (Local Breakout)", example = "false")
+    @Schema(description = "Roaming allowed (local breakout)", example = "false")
     private boolean lboRoamingAllowed = false;
 
-    // --- Policy Referansı ---
+    // --- Policy reference ---
     @Schema(description = "Reference to a Policy document ID (optional)")
     private String policyId;
 
@@ -85,7 +86,7 @@ public class Subscriber extends BaseEntity {
     @Schema(description = "Reference to an EdgeLocation document ID (optional)")
     private String edgeLocationId;
 
-    // --- Profil Listesi ---
+    // --- Profile list ---
     @NotEmpty(message = "At least one profile is required")
     private List<@Valid SessionProfile> profileList;
 

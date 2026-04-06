@@ -18,12 +18,16 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.Date;
+import java.util.regex.Pattern;
 
 @Aspect
 @Component
 @Slf4j
 @RequiredArgsConstructor
 public class AuditAspect {
+
+    private static final Pattern TENANT_ID_PATTERN =
+            Pattern.compile("^[A-Z]{4}-\\d{4}/\\d{4}/\\d{2}$");
 
     private final AuditService auditService;
 
@@ -71,11 +75,25 @@ public class AuditAspect {
     }
 
     private String extractTenantId(ProceedingJoinPoint pjp) {
-        Object[] args = pjp.getArgs();
-        if (args.length > 0 && args[0] instanceof String) {
-            return (String) args[0];
+        try {
+            ServletRequestAttributes attrs =
+                    (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null) {
+                Object tenantId = attrs.getRequest().getAttribute("tenantId");
+                if (tenantId instanceof String s && !s.isBlank()) {
+                    return s;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Could not extract tenantId from request context: {}", e.getMessage());
         }
-        return null;
+        Object[] args = pjp.getArgs();
+        for (Object arg : args) {
+            if (arg instanceof String s && TENANT_ID_PATTERN.matcher(s).matches()) {
+                return s;
+            }
+        }
+        return "SYSTEM";
     }
 
     private void extractUserInfo(AuditLog entry) {

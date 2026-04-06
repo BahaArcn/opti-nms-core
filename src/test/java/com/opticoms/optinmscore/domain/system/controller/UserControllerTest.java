@@ -1,10 +1,13 @@
 package com.opticoms.optinmscore.domain.system.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opticoms.optinmscore.domain.system.dto.UserResponse;
+import com.opticoms.optinmscore.domain.system.mapper.UserMapper;
 import com.opticoms.optinmscore.domain.system.model.User;
 import com.opticoms.optinmscore.domain.system.service.UserService;
 import com.opticoms.optinmscore.security.JwtService;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -13,6 +16,8 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -33,8 +38,25 @@ class UserControllerTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockBean private UserService userService;
+    @MockBean private UserMapper userMapper;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
+
+    @BeforeEach
+    void setUp() {
+        when(userMapper.toResponse(any(User.class))).thenAnswer(inv -> {
+            User u = inv.getArgument(0);
+            UserResponse r = new UserResponse();
+            r.setId(u.getId());
+            r.setUsername(u.getUsername());
+            r.setEmail(u.getEmail());
+            r.setRole(u.getRole());
+            r.setActive(u.isActive());
+            r.setTenantId(u.getTenantId());
+            r.setCreatedAt(u.getCreatedAt());
+            return r;
+        });
+    }
 
     @Test
     @WithMockUser(roles = "ADMIN")
@@ -125,8 +147,11 @@ class UserControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
     void changePassword_returns200() throws Exception {
+        User principal = buildUser("admin");
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
+
         mockMvc.perform(put("/api/v1/users/user-1/password")
                         .requestAttr("tenantId", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -134,6 +159,7 @@ class UserControllerTest {
                 .andExpect(status().isOk());
 
         verify(userService).changePassword(TENANT, "user-1", "oldPass1", "newPass1");
+        SecurityContextHolder.clearContext();
     }
 
     @Test

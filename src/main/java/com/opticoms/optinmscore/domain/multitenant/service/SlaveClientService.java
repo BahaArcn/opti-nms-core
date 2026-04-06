@@ -12,6 +12,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -66,6 +67,7 @@ public class SlaveClientService {
     }
 
     @Scheduled(fixedDelay = 30000)
+    @SchedulerLock(name = "slave_heartbeat", lockAtMostFor = "55s", lockAtLeastFor = "10s")
     public void sendHeartbeat() {
         List<GlobalConfig> configs = globalConfigRepository.findAll();
         for (GlobalConfig config : configs) {

@@ -1,7 +1,9 @@
 package com.opticoms.optinmscore.domain.edgelocation.controller;
 
 import com.opticoms.optinmscore.common.util.TenantContext;
-import com.opticoms.optinmscore.domain.edgelocation.model.EdgeLocation;
+import com.opticoms.optinmscore.domain.edgelocation.dto.EdgeLocationRequest;
+import com.opticoms.optinmscore.domain.edgelocation.dto.EdgeLocationResponse;
+import com.opticoms.optinmscore.domain.edgelocation.mapper.EdgeLocationMapper;
 import com.opticoms.optinmscore.domain.edgelocation.service.EdgeLocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,20 +25,22 @@ import org.springframework.web.bind.annotation.*;
 public class EdgeLocationController {
 
     private final EdgeLocationService edgeLocationService;
+    private final EdgeLocationMapper edgeLocationMapper;
 
     @Operation(summary = "Create a new edge location")
     @PostMapping
-    public ResponseEntity<EdgeLocation> create(
+    public ResponseEntity<EdgeLocationResponse> create(
             HttpServletRequest request,
-            @Valid @RequestBody EdgeLocation edgeLocation) {
+            @Valid @RequestBody EdgeLocationRequest edgeLocationRequest) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(edgeLocationService.create(tenantId, edgeLocation));
+                .body(edgeLocationMapper.toResponse(
+                        edgeLocationService.create(tenantId, edgeLocationMapper.toEntity(edgeLocationRequest))));
     }
 
     @Operation(summary = "List all edge locations with pagination")
     @GetMapping
-    public ResponseEntity<Page<EdgeLocation>> list(
+    public ResponseEntity<Page<EdgeLocationResponse>> list(
             HttpServletRequest request,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -44,26 +48,29 @@ public class EdgeLocationController {
             @RequestParam(defaultValue = "DESC") Sort.Direction sortDir) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortDir, sortBy));
-        return ResponseEntity.ok(edgeLocationService.list(tenantId, pageable));
+        return ResponseEntity.ok(edgeLocationService.list(tenantId, pageable)
+                .map(edgeLocationMapper::toResponse));
     }
 
     @Operation(summary = "Get edge location by ID")
     @GetMapping("/{id}")
-    public ResponseEntity<EdgeLocation> getById(
+    public ResponseEntity<EdgeLocationResponse> getById(
             HttpServletRequest request,
             @PathVariable String id) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(edgeLocationService.getById(tenantId, id));
+        return ResponseEntity.ok(edgeLocationMapper.toResponse(
+                edgeLocationService.getById(tenantId, id)));
     }
 
     @Operation(summary = "Update edge location by ID")
     @PutMapping("/{id}")
-    public ResponseEntity<EdgeLocation> update(
+    public ResponseEntity<EdgeLocationResponse> update(
             HttpServletRequest request,
             @PathVariable String id,
-            @Valid @RequestBody EdgeLocation edgeLocation) {
+            @Valid @RequestBody EdgeLocationRequest edgeLocationRequest) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(edgeLocationService.update(tenantId, id, edgeLocation));
+        return ResponseEntity.ok(edgeLocationMapper.toResponse(
+                edgeLocationService.update(tenantId, id, edgeLocationMapper.toEntity(edgeLocationRequest))));
     }
 
     @Operation(summary = "Delete edge location by ID")

@@ -1,17 +1,32 @@
 package com.opticoms.optinmscore.security.encryption;
 
+import com.opticoms.optinmscore.config.encryption.EncryptionMetadata;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.mongodb.core.MongoTemplate;
+
+import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 class EncryptionServiceTest {
 
     private EncryptionService service;
+    private MongoTemplate mongoTemplate;
 
     @BeforeEach
     void setUp() throws Exception {
-        service = new EncryptionService();
+        mongoTemplate = mock(MongoTemplate.class);
+
+        EncryptionMetadata meta = new EncryptionMetadata();
+        meta.setId("MASTER");
+        byte[] fixedSalt = new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+        meta.setSaltBase64(Base64.getEncoder().encodeToString(fixedSalt));
+        when(mongoTemplate.findById("MASTER", EncryptionMetadata.class)).thenReturn(meta);
+
+        service = new EncryptionService(mongoTemplate);
         var field = EncryptionService.class.getDeclaredField("masterKeyString");
         field.setAccessible(true);
         field.set(service, "TestMasterKeyForUnitTests123456");
@@ -108,7 +123,7 @@ class EncryptionServiceTest {
     void decrypt_wrongKey_throwsException() throws Exception {
         String encrypted = service.encrypt("secret-data");
 
-        EncryptionService otherService = new EncryptionService();
+        EncryptionService otherService = new EncryptionService(mongoTemplate);
         var field = EncryptionService.class.getDeclaredField("masterKeyString");
         field.setAccessible(true);
         field.set(otherService, "DifferentMasterKeyForTesting999");
@@ -120,5 +135,21 @@ class EncryptionServiceTest {
     @Test
     void decrypt_corruptedData_throwsException() {
         assertThrows(Exception.class, () -> service.decrypt("not-valid-base64!!!"));
+    }
+
+    @Test
+    void init_noSaltInDb_generatesAndSavesNew() throws Exception {
+        MongoTemplate freshMongo = mock(MongoTemplate.class);
+        when(freshMongo.findById("MASTER", EncryptionMetadata.class)).thenReturn(null);
+        when(freshMongo.save(any(EncryptionMetadata.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        EncryptionService freshService = new EncryptionService(freshMongo);
+        var field = EncryptionService.class.getDeclaredField("masterKeyString");
+        field.setAccessible(true);
+        field.set(freshService, "TestMasterKeyForUnitTests123456");
+        freshService.init();
+
+        verify(freshMongo).save(any(EncryptionMetadata.class));
+        assertNotNull(freshService.encrypt("test"));
     }
 }

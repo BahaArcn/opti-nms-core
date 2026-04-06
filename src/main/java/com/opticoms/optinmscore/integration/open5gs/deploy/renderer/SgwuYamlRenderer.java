@@ -17,7 +17,7 @@ import java.util.Map;
  * SGW-U (Serving Gateway - User Plane) is the 4G equivalent of UPF's user-plane.
  * Active only when networkMode is ONLY_4G or HYBRID_4G_5G.
  *
- * LLD Parametre → YAML Path:
+ * LLD parameter → YAML path:
  *   GlobalConfig.maxSupportedDevices  → global.max.ue
  *   GlobalConfig.maxSupportedGNBs     → global.max.gnb
  *   UpfConfig.s1uInterfaceIp          → sgwu.gtpu.server[0].address

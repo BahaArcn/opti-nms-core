@@ -3,7 +3,9 @@ package com.opticoms.optinmscore.domain.firewall.service;
 import com.opticoms.optinmscore.domain.firewall.model.FirewallRule;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -142,8 +144,8 @@ public class IptablesExecutor {
                 || (rule.getDestinationPort() != null && rule.getDestinationPort() > 0);
         if (hasPort && (rule.getProtocol() == FirewallRule.Protocol.ALL
                 || rule.getProtocol() == FirewallRule.Protocol.ICMP)) {
-            throw new IllegalArgumentException(
-                    "Port (--sport/--dport) requires protocol TCP or UDP, but got: " + rule.getProtocol());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Port specification requires protocol TCP or UDP");
         }
     }
 

@@ -40,7 +40,7 @@ class AuthControllerTest {
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"%s","username":"admin","password":"secret123"}
+                                {"username":"admin@%s","password":"secret123"}
                                 """.formatted(TENANT)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").value("jwt-token-value"))
@@ -58,7 +58,7 @@ class AuthControllerTest {
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"%s","username":"admin","password":"wrongpass"}
+                                {"username":"admin@%s","password":"wrongpass"}
                                 """.formatted(TENANT)))
                 .andExpect(status().isUnauthorized());
     }
@@ -71,7 +71,7 @@ class AuthControllerTest {
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"UNKN-9999/9999/99","username":"admin","password":"secret123"}
+                                {"username":"admin@UNKN-9999/9999/99","password":"secret123"}
                                 """))
                 .andExpect(status().isUnauthorized());
     }
@@ -84,19 +84,29 @@ class AuthControllerTest {
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"%s","username":"admin","password":"secret123"}
+                                {"username":"admin@%s","password":"secret123"}
                                 """.formatted(TENANT)))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void login_missingTenantId_returns400() throws Exception {
+    void login_usernameWithoutTenant_returns401() throws Exception {
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"username":"admin","password":"secret123"}
                                 """))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void login_emptyUsernameBeforeAt_returns401() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"@%s","password":"secret123"}
+                                """.formatted(TENANT)))
+                .andExpect(status().isUnauthorized());
     }
 
     private User buildUser(String username, boolean active) {

@@ -12,15 +12,20 @@ import com.opticoms.optinmscore.domain.observability.model.Alarm;
 import com.opticoms.optinmscore.domain.observability.repository.AlarmRepository;
 import com.opticoms.optinmscore.domain.subscriber.repository.SubscriberRepository;
 import com.opticoms.optinmscore.domain.tenant.model.Tenant;
-import com.opticoms.optinmscore.domain.tenant.repository.TenantRepository;
+import com.opticoms.optinmscore.domain.tenant.service.TenantService;
 import com.opticoms.optinmscore.integration.open5gs.Open5gsClient;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DashboardService {
@@ -31,24 +36,43 @@ public class DashboardService {
     private final PduSessionRepository pduSessionRepository;
     private final AlarmRepository alarmRepository;
     private final Open5gsClient open5gsClient;
-    private final TenantRepository tenantRepository;
+    private final TenantService tenantService;
     private final EdgeLocationRepository edgeLocationRepository;
     private final LicenseService licenseService;
 
-    public DashboardSummary getDashboardSummary(String tenantId) {
-        Tenant tenant = tenantRepository.findByTenantId(tenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Tenant not found: " + tenantId));
+    private static final long CACHE_TTL_MS = 30_000;
+    private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
 
-        boolean amfReachable = open5gsClient.isAmfHealthy(tenant.getAmfUrl());
-        boolean smfReachable = open5gsClient.isSmfHealthy(tenant.getSmfUrl());
-        boolean upfReachable = tenant.getUpfMetricsUrl() != null
-                && open5gsClient.isUpfHealthy(tenant.getUpfMetricsUrl());
+    public DashboardSummary getDashboardSummary(String tenantId) {
+        CacheEntry cached = cache.get(tenantId);
+        if (cached != null && !cached.isExpired()) {
+            return cached.summary;
+        }
+
+        DashboardSummary summary = buildSummary(tenantId);
+        cache.put(tenantId, new CacheEntry(summary, Instant.now()));
+        return summary;
+    }
+
+    private DashboardSummary buildSummary(String tenantId) {
+        Tenant tenant = tenantService.getTenant(tenantId);
+
+        CompletableFuture<Boolean> amfFuture = CompletableFuture.supplyAsync(
+                () -> safeHealthCheck(() -> open5gsClient.isAmfHealthy(tenant.getAmfUrl())));
+        CompletableFuture<Boolean> smfFuture = CompletableFuture.supplyAsync(
+                () -> safeHealthCheck(() -> open5gsClient.isSmfHealthy(tenant.getSmfUrl())));
+        CompletableFuture<Boolean> upfFuture = CompletableFuture.supplyAsync(
+                () -> tenant.getUpfMetricsUrl() != null
+                        && safeHealthCheck(() -> open5gsClient.isUpfHealthy(tenant.getUpfMetricsUrl())));
 
         long criticalAlarms = alarmRepository.countByTenantIdAndSeverityAndStatus(
                 tenantId, Alarm.Severity.CRITICAL, Alarm.AlarmStatus.ACTIVE);
         long majorAlarms = alarmRepository.countByTenantIdAndSeverityAndStatus(
                 tenantId, Alarm.Severity.MAJOR, Alarm.AlarmStatus.ACTIVE);
+
+        boolean amfReachable = amfFuture.join();
+        boolean smfReachable = smfFuture.join();
+        boolean upfReachable = upfFuture.join();
 
         return DashboardSummary.builder()
                 .totalSubscribers(subscriberRepository.countByTenantId(tenantId))
@@ -71,12 +95,21 @@ public class DashboardService {
                 .build();
     }
 
+    private boolean safeHealthCheck(java.util.function.Supplier<Boolean> check) {
+        try {
+            return check.get();
+        } catch (Exception e) {
+            log.warn("Health check failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
     private boolean isLicenseActive(String tenantId) {
         try {
             LicenseService.LicenseStatus status = licenseService.getLicenseStatus(tenantId);
             return status.isActive();
         } catch (Exception e) {
-            return true; // no license = unrestricted
+            return true;
         }
     }
 
@@ -114,5 +147,11 @@ public class DashboardService {
 
     public enum SystemStatus {
         HEALTHY, DEGRADED, DOWN
+    }
+
+    private record CacheEntry(DashboardSummary summary, Instant createdAt) {
+        boolean isExpired() {
+            return Instant.now().toEpochMilli() - createdAt.toEpochMilli() > CACHE_TTL_MS;
+        }
     }
 }

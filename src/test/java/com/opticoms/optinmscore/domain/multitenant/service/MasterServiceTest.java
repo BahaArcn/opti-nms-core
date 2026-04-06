@@ -1,6 +1,6 @@
 package com.opticoms.optinmscore.domain.multitenant.service;
 
-import com.opticoms.optinmscore.common.exception.EntityNotFoundException;
+import org.springframework.web.server.ResponseStatusException;
 import com.opticoms.optinmscore.domain.multitenant.model.SlaveNode;
 import com.opticoms.optinmscore.domain.multitenant.model.SlaveNode.SlaveStatus;
 import com.opticoms.optinmscore.domain.multitenant.repository.SlaveNodeRepository;
@@ -37,17 +37,19 @@ class MasterServiceTest {
 
     private static final String TENANT = "OPTC-0001/0001/01";
 
+    private static final String PUBLIC_SLAVE = "http://203.0.113.10:8080";
+
     @Test
     @DisplayName("registerSlave - saves and returns ONLINE node")
     void registerSlave_savesAndReturnsOnlineNode() {
-        when(slaveNodeRepository.findByTenantIdAndSlaveAddress(TENANT, "http://slave1:8080"))
+        when(slaveNodeRepository.findByTenantIdAndSlaveAddress(TENANT, PUBLIC_SLAVE))
                 .thenReturn(Optional.empty());
         when(slaveNodeRepository.save(any(SlaveNode.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        SlaveNode result = masterService.registerSlave(TENANT, "http://slave1:8080", "slaveTenant1");
+        SlaveNode result = masterService.registerSlave(TENANT, PUBLIC_SLAVE, "slaveTenant1");
 
         assertThat(result.getStatus()).isEqualTo(SlaveStatus.ONLINE);
-        assertThat(result.getSlaveAddress()).isEqualTo("http://slave1:8080");
+        assertThat(result.getSlaveAddress()).isEqualTo(PUBLIC_SLAVE);
         assertThat(result.getSlaveTenantId()).isEqualTo("slaveTenant1");
         assertThat(result.getRegisteredAt()).isNotNull();
         assertThat(result.getLastHeartbeat()).isNotNull();
@@ -55,24 +57,24 @@ class MasterServiceTest {
     }
 
     @Test
-    @DisplayName("registerSlave - when duplicate, throws IllegalStateException")
-    void registerSlave_whenDuplicate_throwsIllegalStateException() {
-        when(slaveNodeRepository.findByTenantIdAndSlaveAddress(TENANT, "http://slave1:8080"))
+    @DisplayName("registerSlave - when duplicate, throws ResponseStatusException CONFLICT")
+    void registerSlave_whenDuplicate_throwsResponseStatusException() {
+        when(slaveNodeRepository.findByTenantIdAndSlaveAddress(TENANT, PUBLIC_SLAVE))
                 .thenReturn(Optional.of(new SlaveNode()));
 
-        assertThatThrownBy(() -> masterService.registerSlave(TENANT, "http://slave1:8080", "slaveTenant1"))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> masterService.registerSlave(TENANT, PUBLIC_SLAVE, "slaveTenant1"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
                 .hasMessageContaining("already registered");
     }
 
     @Test
-    @DisplayName("deregisterSlave - when not found, throws EntityNotFoundException")
-    void deregisterSlave_whenNotFound_throwsEntityNotFoundException() {
+    @DisplayName("deregisterSlave - when not found, throws ResponseStatusException NOT_FOUND")
+    void deregisterSlave_whenNotFound_throwsResponseStatusException() {
         when(slaveNodeRepository.findByTenantIdAndSlaveAddress(TENANT, "http://unknown:8080"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> masterService.deregisterSlave(TENANT, "http://unknown:8080"))
-                .isInstanceOf(EntityNotFoundException.class);
+                .isInstanceOf(ResponseStatusException.class);
     }
 
     @Test
@@ -111,8 +113,8 @@ class MasterServiceTest {
         slave2.setSlaveTenantId("st2");
         slave2.setStatus(SlaveStatus.ONLINE);
 
-        when(slaveNodeRepository.findByTenantIdAndStatus(TENANT, SlaveStatus.ONLINE))
-                .thenReturn(List.of(slave1, slave2));
+        when(slaveNodeRepository.findByTenantIdAndStatus(eq(TENANT), eq(SlaveStatus.ONLINE), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(slave1, slave2)));
 
         masterService.pushConfigToAllSlaves(TENANT);
 
@@ -139,8 +141,8 @@ class MasterServiceTest {
         slave2.setSlaveTenantId("st2");
         slave2.setStatus(SlaveStatus.ONLINE);
 
-        when(slaveNodeRepository.findByTenantIdAndStatus(TENANT, SlaveStatus.ONLINE))
-                .thenReturn(List.of(slave1, slave2));
+        when(slaveNodeRepository.findByTenantIdAndStatus(eq(TENANT), eq(SlaveStatus.ONLINE), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(slave1, slave2)));
 
         when(restTemplate.exchange(
                 eq("http://slave1:8080/api/v1/slave/config"),
@@ -150,7 +152,7 @@ class MasterServiceTest {
         masterService.pushConfigToAllSlaves(TENANT);
 
         assertThat(slave1.getStatus()).isEqualTo(SlaveStatus.OFFLINE);
-        verify(slaveNodeRepository).save(slave1);
+        verify(slaveNodeRepository).saveAll(anyList());
         verify(restTemplate, times(2)).exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Void.class));
     }
 
@@ -175,6 +177,6 @@ class MasterServiceTest {
         assertThat(count).isEqualTo(1);
         assertThat(stale.getStatus()).isEqualTo(SlaveStatus.OFFLINE);
         assertThat(fresh.getStatus()).isEqualTo(SlaveStatus.ONLINE);
-        verify(slaveNodeRepository, times(1)).save(stale);
+        verify(slaveNodeRepository, times(1)).saveAll(List.of(stale));
     }
 }

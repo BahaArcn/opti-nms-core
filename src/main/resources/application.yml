@@ -4,12 +4,12 @@ spring:
 
   # ============================================
   # MONGODB CONFIGURATION
-  # ✅ Environment Variables kullanıyoruz
+  # Credentials and host via environment variables (see uri placeholders)
   # ============================================
   data:
     mongodb:
       uri: mongodb://${MONGO_USERNAME:admin}:${MONGO_PASSWORD:password}@${MONGO_HOST:localhost}:${MONGO_PORT:27017}/${MONGO_DATABASE:optinms_db}?authSource=admin
-      auto-index-creation: true # Development için true, Production'da false olmalı
+      auto-index-creation: true # true for dev; prefer false in production
 
   # ============================================
   # MULTIPART FILE UPLOAD
@@ -23,12 +23,12 @@ spring:
   # JACKSON JSON CONFIGURATION
   # ============================================
   jackson:
-    # ✅ null değerleri JSON'da gösterme (cleaner response)
+    # Omit null properties in JSON
     default-property-inclusion: non_null
-    # ✅ Date/Time formatı (ISO 8601 standard)
+    # ISO-8601-style timestamps
     date-format: yyyy-MM-dd'T'HH:mm:ss.SSS'Z'
     time-zone: UTC
-    # ✅ Pretty print (development için okunabilir JSON)
+    # Pretty-print JSON (useful in development)
     serialization:
       indent_output: true
 
@@ -38,7 +38,6 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
 
-  # ✅ Graceful shutdown
   shutdown: graceful
 
   error:
@@ -48,23 +47,19 @@ server:
 
 # ============================================
 # MANAGEMENT (ACTUATOR) CONFIGURATION
-# ✅ Health check endpoints
 # ============================================
 management:
   endpoints:
     web:
       base-path: /actuator
       exposure:
-        # ✅ Expose edilen endpoint'ler
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
 
   endpoint:
     health:
-      # ✅ Detaylı health bilgisi
-      show-details: always
-      show-components: always
+      show-details: when-authorized
+      show-components: when-authorized
 
-  # ✅ Health indicators
   health:
     mongo:
       enabled: true
@@ -77,8 +72,8 @@ management:
 logging:
   level:
     root: INFO
-    com.opticoms.optinmscore: DEBUG # Kendi package'ımız için DEBUG
-    org.springframework.data.mongodb: DEBUG # MongoDB query'leri göster
+    com.opticoms.optinmscore: INFO
+    org.springframework.data.mongodb: INFO
     org.springframework.web: INFO
 
   pattern:
@@ -101,7 +96,6 @@ springdoc:
 
 # ============================================
 # APPLICATION CUSTOM PROPERTIES
-# ✅ Environment Variables kullanıyoruz
 # ============================================
 app:
   default-admin:
@@ -127,6 +121,10 @@ app:
     auth-requests-per-window: ${RATE_LIMIT_AUTH_REQUESTS:5}
     auth-window-seconds: ${RATE_LIMIT_AUTH_WINDOW:60}
     cleanup-interval-minutes: ${RATE_LIMIT_CLEANUP_MINUTES:5}
+  backup:
+    storage-path: ${BACKUP_STORAGE_PATH:/data/backups}
+    cron: ${BACKUP_CRON:0 0 3 * * *}
+    retention-count: ${BACKUP_RETENTION_COUNT:3}
 
 # ============================================
 # OPEN5GS INTEGRATION

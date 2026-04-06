@@ -2,6 +2,7 @@ package com.opticoms.optinmscore.domain.tenant.service;
 
 import com.opticoms.optinmscore.domain.tenant.model.Tenant;
 import com.opticoms.optinmscore.domain.tenant.repository.TenantRepository;
+import com.opticoms.optinmscore.security.encryption.EncryptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -16,34 +17,46 @@ import java.util.List;
 public class TenantService {
 
     private final TenantRepository tenantRepository;
+    private final EncryptionService encryptionService;
 
     public Tenant createTenant(Tenant tenant) {
         if (tenantRepository.existsByTenantId(tenant.getTenantId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Tenant already exists: " + tenant.getTenantId());
         }
+        encryptUri(tenant);
         log.info("Creating tenant: id={}, name={}", tenant.getTenantId(), tenant.getName());
-        return tenantRepository.save(tenant);
+        Tenant saved = tenantRepository.save(tenant);
+        decryptUri(saved);
+        return saved;
     }
 
     public Tenant getTenant(String tenantId) {
-        return tenantRepository.findByTenantId(tenantId)
+        Tenant tenant = tenantRepository.findByTenantId(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Tenant not found: " + tenantId));
+        decryptUri(tenant);
+        return tenant;
     }
 
     public Tenant getTenantById(String id) {
-        return tenantRepository.findById(id)
+        Tenant tenant = tenantRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Tenant not found with id: " + id));
+        decryptUri(tenant);
+        return tenant;
     }
 
     public List<Tenant> listTenants() {
-        return tenantRepository.findAll();
+        List<Tenant> tenants = tenantRepository.findAll();
+        tenants.forEach(this::decryptUri);
+        return tenants;
     }
 
     public List<Tenant> getActiveTenants() {
-        return tenantRepository.findByActiveTrue();
+        List<Tenant> tenants = tenantRepository.findByActiveTrue();
+        tenants.forEach(this::decryptUri);
+        return tenants;
     }
 
     public Tenant updateTenant(String tenantId, Tenant update) {
@@ -56,15 +69,21 @@ public class TenantService {
         if (update.isActive() != existing.isActive()) {
             existing.setActive(update.isActive());
         }
+        encryptUri(existing);
         log.info("Updating tenant: id={}", tenantId);
-        return tenantRepository.save(existing);
+        Tenant saved = tenantRepository.save(existing);
+        decryptUri(saved);
+        return saved;
     }
 
     public Tenant deactivateTenant(String tenantId) {
         Tenant tenant = getTenant(tenantId);
+        encryptUri(tenant);
         tenant.setActive(false);
         log.info("Deactivating tenant: id={}", tenantId);
-        return tenantRepository.save(tenant);
+        Tenant saved = tenantRepository.save(tenant);
+        decryptUri(saved);
+        return saved;
     }
 
     /**
@@ -78,5 +97,24 @@ public class TenantService {
             tenantRepository.delete(tenant);
             log.info("Hard-deleted tenant {} (onboarding compensation)", tenantId);
         });
+    }
+
+    private void encryptUri(Tenant tenant) {
+        String uri = tenant.getOpen5gsMongoUri();
+        if (uri != null && !uri.isBlank()) {
+            tenant.setOpen5gsMongoUri(encryptionService.encrypt(uri));
+        }
+    }
+
+    private void decryptUri(Tenant tenant) {
+        String uri = tenant.getOpen5gsMongoUri();
+        if (uri != null && !uri.isBlank()) {
+            try {
+                tenant.setOpen5gsMongoUri(encryptionService.decrypt(uri));
+            } catch (Exception e) {
+                log.warn("Could not decrypt open5gsMongoUri for tenant {} — may be plaintext (pre-migration)",
+                        tenant.getTenantId());
+            }
+        }
     }
 }

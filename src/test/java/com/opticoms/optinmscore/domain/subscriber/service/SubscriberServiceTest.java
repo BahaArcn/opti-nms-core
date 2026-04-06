@@ -1,14 +1,10 @@
 package com.opticoms.optinmscore.domain.subscriber.service;
 
-import com.opticoms.optinmscore.domain.apn.repository.ApnProfileRepository;
 import com.opticoms.optinmscore.domain.inventory.repository.ConnectedUeRepository;
 import com.opticoms.optinmscore.domain.license.service.LicenseService;
-import com.opticoms.optinmscore.domain.policy.service.PolicyService;
 import com.opticoms.optinmscore.domain.subscriber.model.Subscriber;
 import com.opticoms.optinmscore.domain.subscriber.repository.SubscriberRepository;
-import com.opticoms.optinmscore.domain.tenant.model.Tenant;
-import com.opticoms.optinmscore.domain.tenant.repository.TenantRepository;
-import com.opticoms.optinmscore.integration.open5gs.Open5gsProvisioningService;
+import com.opticoms.optinmscore.domain.subscriber.service.SubscriberSyncService;
 import com.opticoms.optinmscore.security.encryption.EncryptionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +13,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -38,42 +35,32 @@ class SubscriberServiceTest {
 
     @Mock private SubscriberRepository subscriberRepository;
     @Mock private EncryptionService encryptionService;
-    @Mock private Open5gsProvisioningService open5gsProvisioning;
-    @Mock private TenantRepository tenantRepository;
+    @Mock private SubscriberSyncService subscriberSync;
     @Mock private ConnectedUeRepository connectedUeRepository;
-    @Mock private PolicyService policyService;
     @Mock private LicenseService licenseService;
-    @Mock private ApnProfileRepository apnProfileRepository;
+    @Mock private SubscriberHelper subscriberHelper;
 
     @InjectMocks
     private SubscriberService service;
 
     private Subscriber subscriber;
-    private Tenant testTenant;
 
     @BeforeEach
     void setUp() {
         subscriber = buildSubscriber();
-        testTenant = new Tenant();
-        testTenant.setTenantId(TENANT);
-        testTenant.setName("Test Tenant");
-        testTenant.setAmfUrl("http://localhost:9090");
-        testTenant.setSmfUrl("http://localhost:9091");
-        testTenant.setOpen5gsMongoUri(OPEN5GS_URI);
     }
 
     @Test
     void createSubscriber_success() {
         when(encryptionService.hash(anyString())).thenReturn(IMSI_HASH);
         when(subscriberRepository.existsByTenantIdAndImsiHash(TENANT, IMSI_HASH)).thenReturn(false);
-        when(encryptionService.encrypt(anyString())).thenReturn("encrypted");
         when(subscriberRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(tenantRepository.findByTenantId(TENANT)).thenReturn(Optional.of(testTenant));
+        when(subscriberHelper.resolveOpen5gsUri(TENANT)).thenReturn(OPEN5GS_URI);
 
         Subscriber result = service.createSubscriber(TENANT, subscriber);
 
         assertEquals(TENANT, result.getTenantId());
-        verify(open5gsProvisioning).provisionSubscriber(any(), eq(OPEN5GS_URI));
+        verify(subscriberSync).provision(any(), eq(OPEN5GS_URI));
         verify(subscriberRepository).save(any());
     }
 
@@ -94,6 +81,8 @@ class SubscriberServiceTest {
         subscriber.setKi("SHORT");
         when(encryptionService.hash(IMSI)).thenReturn(IMSI_HASH);
         when(subscriberRepository.existsByTenantIdAndImsiHash(TENANT, IMSI_HASH)).thenReturn(false);
+        doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ki must be exactly 16 bytes (32 hex chars)"))
+                .when(subscriberHelper).validateKeys(any());
 
         assertThrows(ResponseStatusException.class,
                 () -> service.createSubscriber(TENANT, subscriber));
@@ -104,6 +93,8 @@ class SubscriberServiceTest {
         subscriber.setKi("ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ");
         when(encryptionService.hash(IMSI)).thenReturn(IMSI_HASH);
         when(subscriberRepository.existsByTenantIdAndImsiHash(TENANT, IMSI_HASH)).thenReturn(false);
+        doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ki must contain only hexadecimal characters"))
+                .when(subscriberHelper).validateKeys(any());
 
         assertThrows(ResponseStatusException.class,
                 () -> service.createSubscriber(TENANT, subscriber));
@@ -113,9 +104,9 @@ class SubscriberServiceTest {
     void createSubscriber_provisioningFails_throwsServiceUnavailable() {
         when(encryptionService.hash(IMSI)).thenReturn(IMSI_HASH);
         when(subscriberRepository.existsByTenantIdAndImsiHash(TENANT, IMSI_HASH)).thenReturn(false);
-        when(tenantRepository.findByTenantId(TENANT)).thenReturn(Optional.of(testTenant));
-        doThrow(new RuntimeException("Open5GS down"))
-                .when(open5gsProvisioning).provisionSubscriber(any(), anyString());
+        when(subscriberHelper.resolveOpen5gsUri(TENANT)).thenReturn(OPEN5GS_URI);
+        doThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Open5GS down"))
+                .when(subscriberSync).provision(any(), anyString());
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                 () -> service.createSubscriber(TENANT, subscriber));
@@ -127,11 +118,18 @@ class SubscriberServiceTest {
     void createSubscriber_encryptsSensitiveFieldsBeforeSave() {
         when(encryptionService.hash(anyString())).thenReturn("hash-value");
         when(subscriberRepository.existsByTenantIdAndImsiHash(eq(TENANT), anyString())).thenReturn(false);
-        when(encryptionService.encrypt(IMSI)).thenReturn("enc-imsi");
-        when(encryptionService.encrypt(KI)).thenReturn("enc-ki");
-        when(encryptionService.encrypt(OPC)).thenReturn("enc-opc");
         when(subscriberRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(tenantRepository.findByTenantId(TENANT)).thenReturn(Optional.of(testTenant));
+        when(subscriberHelper.resolveOpen5gsUri(TENANT)).thenReturn(OPEN5GS_URI);
+
+        doAnswer(inv -> {
+            Subscriber s = inv.getArgument(0);
+            s.setImsiHash("hash-value");
+            s.setImsi("enc-imsi");
+            s.setKi("enc-ki");
+            s.setOpc("enc-opc");
+            s.setOp(null);
+            return null;
+        }).when(subscriberHelper).encryptSensitiveData(any());
 
         service.createSubscriber(TENANT, subscriber);
 
@@ -155,9 +153,14 @@ class SubscriberServiceTest {
         when(encryptionService.hash(IMSI)).thenReturn(IMSI_HASH);
         when(subscriberRepository.findByImsiHashAndTenantId(IMSI_HASH, TENANT))
                 .thenReturn(Optional.of(encrypted));
-        when(encryptionService.decrypt("enc-imsi")).thenReturn(IMSI);
-        when(encryptionService.decrypt("enc-ki")).thenReturn(KI);
-        when(encryptionService.decrypt("enc-opc")).thenReturn(OPC);
+
+        doAnswer(inv -> {
+            Subscriber s = inv.getArgument(0);
+            s.setImsi(IMSI);
+            s.setKi(KI);
+            s.setOpc(OPC);
+            return null;
+        }).when(subscriberHelper).decryptSensitiveData(any());
 
         Subscriber result = service.getSubscriber(TENANT, IMSI);
 
@@ -183,11 +186,11 @@ class SubscriberServiceTest {
         when(encryptionService.hash(IMSI)).thenReturn(IMSI_HASH);
         when(subscriberRepository.findByImsiHashAndTenantId(IMSI_HASH, TENANT))
                 .thenReturn(Optional.of(existing));
-        when(tenantRepository.findByTenantId(TENANT)).thenReturn(Optional.of(testTenant));
+        when(subscriberHelper.resolveOpen5gsUri(TENANT)).thenReturn(OPEN5GS_URI);
 
         service.deleteSubscriber(TENANT, IMSI);
 
-        verify(open5gsProvisioning).deleteSubscriber(IMSI, OPEN5GS_URI);
+        verify(subscriberSync).deleteQuietly(IMSI, OPEN5GS_URI);
         verify(subscriberRepository).delete(existing);
     }
 
@@ -197,12 +200,11 @@ class SubscriberServiceTest {
         when(encryptionService.hash(IMSI)).thenReturn(IMSI_HASH);
         when(subscriberRepository.findByImsiHashAndTenantId(IMSI_HASH, TENANT))
                 .thenReturn(Optional.of(existing));
-        when(tenantRepository.findByTenantId(TENANT)).thenReturn(Optional.of(testTenant));
-        doThrow(new RuntimeException("connection refused"))
-                .when(open5gsProvisioning).deleteSubscriber(IMSI, OPEN5GS_URI);
+        when(subscriberHelper.resolveOpen5gsUri(TENANT)).thenReturn(OPEN5GS_URI);
 
         service.deleteSubscriber(TENANT, IMSI);
 
+        verify(subscriberSync).deleteQuietly(IMSI, OPEN5GS_URI);
         verify(subscriberRepository).delete(existing);
     }
 
@@ -219,20 +221,23 @@ class SubscriberServiceTest {
     @Test
     void deleteSubscribersBatch_deletesMultiple() {
         Subscriber sub1 = buildSubscriber();
+        sub1.setImsi("enc_imsi_1");
         Subscriber sub2 = buildSubscriber();
-        sub2.setImsi("286010000000002");
+        sub2.setImsi("enc_imsi_2");
 
         when(encryptionService.hash("286010000000001")).thenReturn("h1");
         when(encryptionService.hash("286010000000002")).thenReturn("h2");
-        when(subscriberRepository.findByImsiHashAndTenantId("h1", TENANT)).thenReturn(Optional.of(sub1));
-        when(subscriberRepository.findByImsiHashAndTenantId("h2", TENANT)).thenReturn(Optional.of(sub2));
-        when(tenantRepository.findByTenantId(TENANT)).thenReturn(Optional.of(testTenant));
+        when(subscriberRepository.findByTenantIdAndImsiHashIn(eq(TENANT), anyCollection()))
+                .thenReturn(List.of(sub1, sub2));
+        when(encryptionService.decrypt("enc_imsi_1")).thenReturn("286010000000001");
+        when(encryptionService.decrypt("enc_imsi_2")).thenReturn("286010000000002");
+        when(subscriberHelper.resolveOpen5gsUri(TENANT)).thenReturn(OPEN5GS_URI);
 
         int deleted = service.deleteSubscribersBatch(TENANT,
                 List.of("286010000000001", "286010000000002"));
 
         assertEquals(2, deleted);
-        verify(subscriberRepository, times(2)).delete(any());
+        verify(subscriberRepository).deleteAll(anyList());
     }
 
     @Test
@@ -243,20 +248,15 @@ class SubscriberServiceTest {
 
     @Test
     void createSubscriber_tenantWithNoOpen5gsUri_provisionSkipped() {
-        Tenant noUriTenant = new Tenant();
-        noUriTenant.setTenantId(TENANT);
-        noUriTenant.setOpen5gsMongoUri(null);
-
         when(encryptionService.hash(anyString())).thenReturn(IMSI_HASH);
         when(subscriberRepository.existsByTenantIdAndImsiHash(TENANT, IMSI_HASH)).thenReturn(false);
-        when(encryptionService.encrypt(anyString())).thenReturn("encrypted");
         when(subscriberRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(tenantRepository.findByTenantId(TENANT)).thenReturn(Optional.of(noUriTenant));
+        when(subscriberHelper.resolveOpen5gsUri(TENANT)).thenReturn(null);
 
         Subscriber result = service.createSubscriber(TENANT, subscriber);
 
         assertEquals(TENANT, result.getTenantId());
-        verify(open5gsProvisioning).provisionSubscriber(any(), isNull());
+        verify(subscriberSync).provision(any(), isNull());
         verify(subscriberRepository).save(any());
     }
 
@@ -264,16 +264,15 @@ class SubscriberServiceTest {
     void createSubscriber_nmsSaveFails_rollsBackOpen5gs() {
         when(encryptionService.hash(anyString())).thenReturn(IMSI_HASH);
         when(subscriberRepository.existsByTenantIdAndImsiHash(TENANT, IMSI_HASH)).thenReturn(false);
-        when(encryptionService.encrypt(anyString())).thenReturn("encrypted");
-        when(tenantRepository.findByTenantId(TENANT)).thenReturn(Optional.of(testTenant));
+        when(subscriberHelper.resolveOpen5gsUri(TENANT)).thenReturn(OPEN5GS_URI);
         when(subscriberRepository.save(any())).thenThrow(new RuntimeException("DB write failed"));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                 () -> service.createSubscriber(TENANT, subscriber));
 
         assertEquals(503, ex.getStatusCode().value());
-        verify(open5gsProvisioning).provisionSubscriber(any(), eq(OPEN5GS_URI));
-        verify(open5gsProvisioning).deleteSubscriber(eq(IMSI), eq(OPEN5GS_URI));
+        verify(subscriberSync).provision(any(), eq(OPEN5GS_URI));
+        verify(subscriberSync).rollbackProvision(eq(IMSI), eq(OPEN5GS_URI));
     }
 
     @Test
@@ -287,11 +286,16 @@ class SubscriberServiceTest {
         when(encryptionService.hash(IMSI)).thenReturn(IMSI_HASH);
         when(subscriberRepository.findByImsiHashAndTenantId(IMSI_HASH, TENANT))
                 .thenReturn(Optional.of(existing));
-        when(encryptionService.decrypt("enc-imsi")).thenReturn(IMSI);
-        when(encryptionService.decrypt("enc-ki")).thenReturn(KI);
-        when(encryptionService.decrypt("enc-opc")).thenReturn(OPC);
-        when(encryptionService.encrypt(anyString())).thenReturn("encrypted");
-        when(tenantRepository.findByTenantId(TENANT)).thenReturn(Optional.of(testTenant));
+
+        doAnswer(inv -> {
+            Subscriber s = inv.getArgument(0);
+            s.setImsi(IMSI);
+            s.setKi(KI);
+            s.setOpc(OPC);
+            return null;
+        }).when(subscriberHelper).decryptSensitiveData(any());
+
+        when(subscriberHelper.resolveOpen5gsUri(TENANT)).thenReturn(OPEN5GS_URI);
         when(subscriberRepository.save(any())).thenThrow(new RuntimeException("DB write failed"));
 
         Subscriber updatedData = buildSubscriber();
@@ -300,7 +304,27 @@ class SubscriberServiceTest {
                 () -> service.updateSubscriber(TENANT, IMSI, updatedData));
 
         assertEquals(503, ex.getStatusCode().value());
-        verify(open5gsProvisioning, times(2)).provisionSubscriber(any(), eq(OPEN5GS_URI));
+        verify(subscriberSync).provision(any(), eq(OPEN5GS_URI));
+        verify(subscriberSync).rollbackUpdate(any(), eq(OPEN5GS_URI));
+    }
+
+    @Test
+    void getAllSubscribersPaged_enrichesConnectionStatus_onlyForPageImsis() {
+        Subscriber sub1 = buildSubscriber();
+        sub1.setImsi("286010000000001");
+        Subscriber sub2 = buildSubscriber();
+        sub2.setImsi("286010000000002");
+
+        org.springframework.data.domain.Page<Subscriber> page =
+                new org.springframework.data.domain.PageImpl<>(List.of(sub1, sub2));
+        when(subscriberRepository.findByTenantId(eq(TENANT), any())).thenReturn(page);
+        when(connectedUeRepository.findByTenantIdAndImsiIn(eq(TENANT), anyList()))
+                .thenReturn(List.of());
+
+        service.getAllSubscribersPaged(TENANT, org.springframework.data.domain.PageRequest.of(0, 20));
+
+        verify(connectedUeRepository).findByTenantIdAndImsiIn(eq(TENANT), anyList());
+        verify(connectedUeRepository, never()).findByTenantId(TENANT);
     }
 
     // --- Helper ---

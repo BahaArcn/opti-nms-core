@@ -24,13 +24,13 @@ public class GlobalConfig extends BaseEntity {
     @NotNull(message = "Network Mode is required")
     private NetworkMode networkMode;
 
-    // Tablo default değeri: 1024
+    /** LLD table default: 1024 */
     @Min(1)
     @Max(100000)
     @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private int maxSupportedDevices = 1024;
 
-    // Tablo default değeri: 64
+    /** LLD table default: 64 */
     @Min(1)
     @Max(1000)
     @Schema(accessMode = Schema.AccessMode.READ_ONLY)

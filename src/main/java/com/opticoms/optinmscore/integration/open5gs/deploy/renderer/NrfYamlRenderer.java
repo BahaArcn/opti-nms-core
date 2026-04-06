@@ -12,16 +12,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * AmfConfig + GlobalConfig → nrfcfg.yaml string üretir.
+ * Renders AmfConfig + GlobalConfig into nrfcfg.yaml.
  *
- * LLD Parametre → YAML Path eşlemesi (Tablo 3 + Tablo 4):
+ * LLD parameter → YAML path (tables 3 + 4):
  *
  *  GlobalConfig.maxSupportedDevices    → global.max.ue
  *  AmfConfig.supportedPlmns            → nrf.serving[*].plmn_id
  *
- *  NOT (Gap 1 kısmen): LLD Tablo 4'te Tai-List → nrf.yaml deniyor.
- *  Mevcut Open5GS NRF YAML şablonunda TAI alanı yok.
- *  Şu an sadece PLMN bazlı serving eklenmiştir.
+ *  Partial Gap 1: LLD table 4 maps Tai-List → nrf.yaml, but the current Open5GS NRF
+ *  YAML template has no TAI field. Only PLMN-based {@code serving} entries are emitted.
  */
 @Component
 public class NrfYamlRenderer {
@@ -36,9 +35,8 @@ public class NrfYamlRenderer {
     }
 
     /**
-     * @param amf    AmfConfig    — PLMN listesi için
-     * @param global GlobalConfig — max.ue için
-     * @return nrfcfg.yaml içeriği (String)
+     * @param amf    PLMN list source when global TAI list is empty
+     * @param global global limits (e.g. max.ue)
      */
     public String render(AmfConfig amf, GlobalConfig global) {
         Map<String, Object> root = new LinkedHashMap<>();
@@ -73,7 +71,7 @@ public class NrfYamlRenderer {
         }
         nrfSection.put("serving", servingList);
 
-        // sbi: sabit K8s service discovery
+        // sbi: fixed K8s service discovery
         nrfSection.put("sbi", buildSbiSection());
 
         root.put("nrf", nrfSection);

@@ -78,6 +78,20 @@ public class Open5gsProvisioningService {
         log.info("Deleted subscriber {} from Open5GS (count: {})", imsi, deleted);
     }
 
+    public long deleteSubscribersBulk(List<String> imsiList, String open5gsMongoUri) {
+        if (open5gsMongoUri == null || open5gsMongoUri.isBlank()) {
+            log.warn("Skipping Open5GS bulk delete -- no open5gsMongoUri configured");
+            return 0;
+        }
+        if (imsiList == null || imsiList.isEmpty()) return 0;
+
+        MongoDatabase db = open5gsMongoConfig.getDatabase(open5gsMongoUri);
+        MongoCollection<Document> collection = db.getCollection(SUBSCRIBERS_COLLECTION);
+        long deleted = collection.deleteMany(Filters.in("imsi", imsiList)).getDeletedCount();
+        log.info("Bulk-deleted {} subscribers from Open5GS", deleted);
+        return deleted;
+    }
+
     /**
      * Bulk-provisions subscribers to Open5GS MongoDB.
      * Uses find($in) + insertMany(ordered=false) + bulkWrite(replaceOne) to minimize round-trips.

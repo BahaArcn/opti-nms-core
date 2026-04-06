@@ -1,12 +1,15 @@
 package com.opticoms.optinmscore.domain.network.controller;
 
+import com.opticoms.optinmscore.common.util.TenantContext;
+import com.opticoms.optinmscore.domain.network.dto.GlobalConfigRequest;
+import com.opticoms.optinmscore.domain.network.dto.GlobalConfigResponse;
+import com.opticoms.optinmscore.domain.network.mapper.NetworkConfigMapper;
 import com.opticoms.optinmscore.domain.network.model.GlobalConfig;
+import com.opticoms.optinmscore.domain.network.service.NetworkConfigService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import com.opticoms.optinmscore.domain.network.service.NetworkConfigService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import com.opticoms.optinmscore.common.util.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,34 +24,29 @@ import java.util.List;
 public class NetworkConfigController {
 
     private final NetworkConfigService networkConfigService;
+    private final NetworkConfigMapper networkConfigMapper;
 
-    /**
-     * Endpoint 1: Mevcut konfigürasyonu getir (GET)
-     */
     @Operation(summary = "Get global network configuration")
     @GetMapping("/global")
-    public ResponseEntity<GlobalConfig> getGlobalConfig(HttpServletRequest request) {
+    public ResponseEntity<GlobalConfigResponse> getGlobalConfig(HttpServletRequest request) {
         String tenantId = TenantContext.getCurrentTenantId(request);
 
         GlobalConfig config = networkConfigService.getGlobalConfig(tenantId);
 
-        // 200 OK HTTP statüsü ile veriyi JSON olarak dönüyoruz.
-        return ResponseEntity.ok(config);
+        return ResponseEntity.ok(networkConfigMapper.toGlobalConfigResponse(config));
     }
 
-    /**
-     * Endpoint 2: Yeni konfigürasyon kaydet veya olanı güncelle (PUT)
-     */
     @Operation(summary = "Update global network configuration")
     @PutMapping("/global")
-    public ResponseEntity<GlobalConfig> saveOrUpdateGlobalConfig(
+    public ResponseEntity<GlobalConfigResponse> saveOrUpdateGlobalConfig(
             HttpServletRequest request,
-            @Valid @RequestBody GlobalConfig newConfig) {
+            @Valid @RequestBody GlobalConfigRequest newConfig) {
         String tenantId = TenantContext.getCurrentTenantId(request);
 
-        GlobalConfig savedConfig = networkConfigService.saveOrUpdateGlobalConfig(tenantId, newConfig);
+        GlobalConfig savedConfig = networkConfigService.saveOrUpdateGlobalConfig(
+                tenantId, networkConfigMapper.toGlobalConfigEntity(newConfig));
 
-        return ResponseEntity.ok(savedConfig);
+        return ResponseEntity.ok(networkConfigMapper.toGlobalConfigResponse(savedConfig));
     }
 
     @Operation(summary = "Get UE IP pool list for the tenant (for DNN combo-box population)")

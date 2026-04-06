@@ -1,15 +1,21 @@
 package com.opticoms.optinmscore.domain.observability.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opticoms.optinmscore.domain.observability.dto.AlarmRequest;
+import com.opticoms.optinmscore.domain.observability.dto.AlarmResponse;
+import com.opticoms.optinmscore.domain.observability.mapper.AlarmMapper;
 import com.opticoms.optinmscore.domain.observability.model.Alarm;
 import com.opticoms.optinmscore.domain.observability.service.AlarmService;
 import com.opticoms.optinmscore.security.JwtService;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
@@ -31,8 +37,32 @@ class AlarmControllerTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockBean private AlarmService alarmService;
+    @MockBean private AlarmMapper alarmMapper;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
+
+    @BeforeEach
+    void stubAlarmMapper() {
+        when(alarmMapper.toResponse(any(Alarm.class))).thenAnswer(invocation -> {
+            Alarm a = invocation.getArgument(0);
+            AlarmResponse r = new AlarmResponse();
+            r.setSource(a.getSource());
+            r.setAlarmType(a.getAlarmType());
+            r.setDescription(a.getDescription());
+            r.setSeverity(a.getSeverity());
+            r.setStatus(a.getStatus());
+            return r;
+        });
+        when(alarmMapper.toEntity(any(AlarmRequest.class))).thenAnswer(invocation -> {
+            AlarmRequest req = invocation.getArgument(0);
+            Alarm a = new Alarm();
+            a.setSource(req.getSource());
+            a.setAlarmType(req.getAlarmType());
+            a.setDescription(req.getDescription());
+            a.setSeverity(req.getSeverity());
+            return a;
+        });
+    }
 
     @Test
     @WithMockUser(roles = "ADMIN")
@@ -42,20 +72,20 @@ class AlarmControllerTest {
         alarm.setAlarmType("LINK_DOWN");
         alarm.setSeverity(Alarm.Severity.CRITICAL);
 
-        when(alarmService.getAlarms(eq(TENANT), isNull(), isNull()))
-                .thenReturn(List.of(alarm));
+        when(alarmService.getAlarms(eq(TENANT), isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(alarm)));
 
         mockMvc.perform(get("/api/v1/fault/alarms")
                         .requestAttr("tenantId", TENANT))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].source").value("gNodeB-001"));
+                .andExpect(jsonPath("$.content[0].source").value("gNodeB-001"));
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
     void getAlarms_withSeverityFilter() throws Exception {
-        when(alarmService.getAlarms(eq(TENANT), eq(Alarm.Severity.CRITICAL), isNull()))
-                .thenReturn(List.of());
+        when(alarmService.getAlarms(eq(TENANT), eq(Alarm.Severity.CRITICAL), isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
 
         mockMvc.perform(get("/api/v1/fault/alarms")
                         .requestAttr("tenantId", TENANT)
@@ -72,13 +102,19 @@ class AlarmControllerTest {
         alarm.setSeverity(Alarm.Severity.CRITICAL);
         alarm.setDescription("Test alarm");
 
+        AlarmRequest request = new AlarmRequest();
+        request.setSource("gNodeB-001");
+        request.setAlarmType("LINK_DOWN");
+        request.setSeverity(Alarm.Severity.CRITICAL);
+        request.setDescription("Test alarm");
+
         when(alarmService.raiseAlarm(eq(TENANT), any()))
                 .thenReturn(new AlarmService.RaiseResult(alarm, true));
 
         mockMvc.perform(post("/api/v1/fault/alarms")
                         .requestAttr("tenantId", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(alarm)))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.source").value("gNodeB-001"));
     }
@@ -91,13 +127,18 @@ class AlarmControllerTest {
         alarm.setAlarmType("LINK_DOWN");
         alarm.setSeverity(Alarm.Severity.CRITICAL);
 
+        AlarmRequest request = new AlarmRequest();
+        request.setSource("gNodeB-001");
+        request.setAlarmType("LINK_DOWN");
+        request.setSeverity(Alarm.Severity.CRITICAL);
+
         when(alarmService.raiseAlarm(eq(TENANT), any()))
                 .thenReturn(new AlarmService.RaiseResult(alarm, false));
 
         mockMvc.perform(post("/api/v1/fault/alarms")
                         .requestAttr("tenantId", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(alarm)))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
     }
 

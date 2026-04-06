@@ -11,6 +11,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -102,15 +105,15 @@ public class AlarmService {
         return "system";
     }
 
-    public List<Alarm> getAlarms(String tenantId, Alarm.Severity severity, Alarm.AlarmStatus status) {
+    public Page<Alarm> getAlarms(String tenantId, Alarm.Severity severity, Alarm.AlarmStatus status, Pageable pageable) {
         if (severity != null && status != null) {
-            return alarmRepository.findByTenantIdAndSeverityAndStatusOrderByEventTimeDesc(tenantId, severity, status);
+            return alarmRepository.findByTenantIdAndSeverityAndStatusOrderByEventTimeDesc(tenantId, severity, status, pageable);
         } else if (severity != null) {
-            return alarmRepository.findByTenantIdAndSeverityOrderByEventTimeDesc(tenantId, severity);
+            return alarmRepository.findByTenantIdAndSeverityOrderByEventTimeDesc(tenantId, severity, pageable);
         } else if (status != null) {
-            return alarmRepository.findByTenantIdAndStatusOrderByEventTimeDesc(tenantId, status);
+            return alarmRepository.findByTenantIdAndStatusOrderByEventTimeDesc(tenantId, status, pageable);
         } else {
-            return alarmRepository.findByTenantIdOrderByEventTimeDesc(tenantId);
+            return alarmRepository.findByTenantIdOrderByEventTimeDesc(tenantId, pageable);
         }
     }
 

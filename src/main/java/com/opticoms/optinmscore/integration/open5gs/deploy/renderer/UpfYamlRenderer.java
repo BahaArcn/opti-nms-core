@@ -3,7 +3,9 @@ package com.opticoms.optinmscore.integration.open5gs.deploy.renderer;
 import com.opticoms.optinmscore.domain.network.model.GlobalConfig;
 import com.opticoms.optinmscore.domain.network.model.SmfConfig;
 import com.opticoms.optinmscore.domain.network.model.UpfConfig;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
@@ -13,14 +15,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * UpfConfig + SmfConfig + GlobalConfig → upfcfg.yaml + wrapper.sh üretir.
+ * Renders UpfConfig + SmfConfig + GlobalConfig into upfcfg.yaml and wrapper.sh.
  *
- * LLD Parametre → YAML Path eşlemesi (Tablo 3 + Tablo 5):
+ * LLD parameter → YAML path (tables 3 + 5):
  *
  *  GlobalConfig.maxSupportedDevices         → global.max.ue
  *
  *  UpfConfig.n3InterfaceIp                  → upf.gtpu.server[0].address
- *    (null ise dev: n3 kullanılır)
+ *    (if null, uses dev: n3)
  *
  *  GlobalConfig.ueIpPoolList[*].ipRange     → upf.session[*].subnet (via tunInterface lookup)
  *  SmfConfig.apnList[*].apnDnnName          → upf.session[*].dnn
@@ -40,9 +42,7 @@ public class UpfYamlRenderer {
         this.yaml = new Yaml(opts);
     }
 
-    /**
-     * @return upfcfg.yaml içeriği (String)
-     */
+    /** @return upfcfg.yaml content */
     public String renderYaml(UpfConfig upf, SmfConfig smf, GlobalConfig global) {
         Map<String, Object> root = new LinkedHashMap<>();
 
@@ -70,8 +70,8 @@ public class UpfYamlRenderer {
     }
 
     /**
-     * wrapper.sh: UPF container başladığında çalışan init script.
-     * Her local DNN için tunInterface adıyla tun device yarat.
+     * wrapper.sh: init script run when the UPF container starts.
+     * Creates a tun device per local DNN using {@code tunInterface}.
      */
     public String renderWrapperScript(SmfConfig smf, GlobalConfig global) {
         StringBuilder sb = new StringBuilder();
@@ -91,7 +91,7 @@ public class UpfYamlRenderer {
             sb.append("ip addr add ").append(gatewayWithPrefix).append(" dev ").append(tunName).append(";\n");
         }
 
-        sb.append("\n# Sistem ayarları\n");
+        sb.append("\n# System settings\n");
         sb.append("sysctl -w net.ipv6.conf.all.disable_ipv6=1;\n");
         sb.append("sysctl -w net.ipv4.conf.all.rp_filter=0;\n");
         sb.append("sysctl -w net.ipv4.conf.default.rp_filter=0;\n");
@@ -119,8 +119,6 @@ public class UpfYamlRenderer {
         return sb.toString();
     }
 
-    // ── Private builder metodları ────────────────────────────────────────────
-
     private GlobalConfig.UeIpPool findPool(GlobalConfig global, String tunInterface) {
         if (global.getUeIpPoolList() != null) {
             for (GlobalConfig.UeIpPool pool : global.getUeIpPoolList()) {
@@ -129,7 +127,8 @@ public class UpfYamlRenderer {
                 }
             }
         }
-        throw new IllegalStateException("UeIpPool not found for tunInterface: " + tunInterface);
+        throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "Configuration error: UeIpPool not found for tunInterface: " + tunInterface);
     }
 
     private Map<String, Object> buildPfcpSection() {

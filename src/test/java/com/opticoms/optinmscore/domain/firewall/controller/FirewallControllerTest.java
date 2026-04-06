@@ -1,10 +1,13 @@
 package com.opticoms.optinmscore.domain.firewall.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opticoms.optinmscore.domain.firewall.dto.FirewallRuleResponse;
+import com.opticoms.optinmscore.domain.firewall.mapper.FirewallRuleMapper;
 import com.opticoms.optinmscore.domain.firewall.model.FirewallRule;
 import com.opticoms.optinmscore.domain.firewall.service.FirewallService;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
 import com.opticoms.optinmscore.security.JwtService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -37,6 +40,40 @@ class FirewallControllerTest {
     @MockBean private FirewallService firewallService;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
+    @MockBean private FirewallRuleMapper firewallRuleMapper;
+
+    @BeforeEach
+    void setUpMapperStubs() {
+        when(firewallRuleMapper.toEntity(any())).thenReturn(new FirewallRule());
+        when(firewallRuleMapper.toResponse(any())).thenAnswer(inv -> {
+            FirewallRule e = inv.getArgument(0);
+            if (e == null) return null;
+            FirewallRuleResponse r = new FirewallRuleResponse();
+            r.setId(e.getId());
+            r.setChain(e.getChain());
+            r.setProtocol(e.getProtocol());
+            r.setDestinationPort(e.getDestinationPort());
+            r.setAction(e.getAction());
+            r.setDescription(e.getDescription());
+            r.setPriority(e.getPriority());
+            r.setEnabled(e.isEnabled());
+            r.setRuleStatus(e.getRuleStatus());
+            return r;
+        });
+        when(firewallRuleMapper.toResponseList(any())).thenAnswer(inv -> {
+            List<FirewallRule> entities = inv.getArgument(0);
+            return entities.stream().map(e -> {
+                FirewallRuleResponse r = new FirewallRuleResponse();
+                r.setId(e.getId());
+                r.setChain(e.getChain());
+                r.setAction(e.getAction());
+                r.setDescription(e.getDescription());
+                r.setEnabled(e.isEnabled());
+                r.setRuleStatus(e.getRuleStatus());
+                return r;
+            }).toList();
+        });
+    }
 
     @Test
     @WithMockUser(roles = "ADMIN")

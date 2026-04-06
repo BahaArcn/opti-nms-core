@@ -1,10 +1,14 @@
 package com.opticoms.optinmscore.domain.system.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opticoms.optinmscore.domain.license.dto.LicenseRequest;
+import com.opticoms.optinmscore.domain.license.dto.LicenseResponse;
+import com.opticoms.optinmscore.domain.license.mapper.LicenseMapper;
 import com.opticoms.optinmscore.domain.license.model.License;
 import com.opticoms.optinmscore.domain.license.service.LicenseService;
 import com.opticoms.optinmscore.security.JwtService;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -31,6 +35,25 @@ class SystemLicenseControllerTest {
     @MockBean private LicenseService licenseService;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
+    @MockBean private LicenseMapper licenseMapper;
+
+    @BeforeEach
+    void setUp() {
+        when(licenseMapper.toResponse(any(License.class))).thenAnswer(inv -> {
+            License e = inv.getArgument(0);
+            LicenseResponse r = new LicenseResponse();
+            r.setMaxSubscribers(e.getMaxSubscribers());
+            r.setActive(e.isActive());
+            return r;
+        });
+        when(licenseMapper.toEntity(any(LicenseRequest.class))).thenAnswer(inv -> {
+            LicenseRequest req = inv.getArgument(0);
+            License l = new License();
+            l.setMaxSubscribers(req.getMaxSubscribers());
+            l.setActive(req.isActive());
+            return l;
+        });
+    }
 
     @Test
     @WithMockUser(roles = "SUPER_ADMIN")

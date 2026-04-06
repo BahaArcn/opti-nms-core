@@ -1,10 +1,12 @@
 package com.opticoms.optinmscore.domain.inventory.controller;
 
 import com.opticoms.optinmscore.common.util.TenantContext;
-import com.opticoms.optinmscore.domain.inventory.model.ConnectedUe;
-import com.opticoms.optinmscore.domain.inventory.model.GNodeB;
-import com.opticoms.optinmscore.domain.inventory.model.NodeResource;
-import com.opticoms.optinmscore.domain.inventory.model.PduSession;
+import com.opticoms.optinmscore.domain.inventory.dto.ConnectedUeResponse;
+import com.opticoms.optinmscore.domain.inventory.dto.GNodeBResponse;
+import com.opticoms.optinmscore.domain.inventory.dto.NodeResourceRequest;
+import com.opticoms.optinmscore.domain.inventory.dto.NodeResourceResponse;
+import com.opticoms.optinmscore.domain.inventory.dto.PduSessionResponse;
+import com.opticoms.optinmscore.domain.inventory.mapper.InventoryMapper;
 import com.opticoms.optinmscore.domain.inventory.service.InventoryService;
 import com.opticoms.optinmscore.domain.inventory.service.NodeResourceService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,10 +28,11 @@ public class InventoryController {
 
     private final InventoryService inventoryService;
     private final NodeResourceService nodeResourceService;
+    private final InventoryMapper inventoryMapper;
 
     @Operation(summary = "List all gNodeBs with pagination")
     @GetMapping("/gnb")
-    public ResponseEntity<Page<GNodeB>> listGNodeBs(
+    public ResponseEntity<Page<GNodeBResponse>> listGNodeBs(
             HttpServletRequest request,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -37,16 +40,17 @@ public class InventoryController {
             @RequestParam(defaultValue = "DESC") Sort.Direction sortDir) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortDir, sortBy));
-        return ResponseEntity.ok(inventoryService.getAllGNodeBsPaged(tenantId, pageable));
+        return ResponseEntity.ok(
+                inventoryService.getAllGNodeBsPaged(tenantId, pageable).map(inventoryMapper::toGNodeBResponse));
     }
 
     @Operation(summary = "Get gNodeB details by gNB ID")
     @GetMapping("/gnb/{gnbId}")
-    public ResponseEntity<GNodeB> getGNodeB(
+    public ResponseEntity<GNodeBResponse> getGNodeB(
             HttpServletRequest request,
             @PathVariable String gnbId) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(inventoryService.getGNodeB(tenantId, gnbId));
+        return ResponseEntity.ok(inventoryMapper.toGNodeBResponse(inventoryService.getGNodeB(tenantId, gnbId)));
     }
 
     @Operation(summary = "Get total gNodeB count")
@@ -59,7 +63,7 @@ public class InventoryController {
 
     @Operation(summary = "List all connected UEs with pagination")
     @GetMapping("/ue")
-    public ResponseEntity<Page<ConnectedUe>> listConnectedUes(
+    public ResponseEntity<Page<ConnectedUeResponse>> listConnectedUes(
             HttpServletRequest request,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -67,7 +71,8 @@ public class InventoryController {
             @RequestParam(defaultValue = "DESC") Sort.Direction sortDir) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortDir, sortBy));
-        return ResponseEntity.ok(inventoryService.getAllConnectedUesPaged(tenantId, pageable));
+        return ResponseEntity.ok(
+                inventoryService.getAllConnectedUesPaged(tenantId, pageable).map(inventoryMapper::toConnectedUeResponse));
     }
 
     @Operation(summary = "Get total connected UE count")
@@ -80,7 +85,7 @@ public class InventoryController {
 
     @Operation(summary = "List all PDU sessions with pagination")
     @GetMapping("/session")
-    public ResponseEntity<Page<PduSession>> listPduSessions(
+    public ResponseEntity<Page<PduSessionResponse>> listPduSessions(
             HttpServletRequest request,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -88,7 +93,8 @@ public class InventoryController {
             @RequestParam(defaultValue = "DESC") Sort.Direction sortDir) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortDir, sortBy));
-        return ResponseEntity.ok(inventoryService.getAllPduSessionsPaged(tenantId, pageable));
+        return ResponseEntity.ok(
+                inventoryService.getAllPduSessionsPaged(tenantId, pageable).map(inventoryMapper::toPduSessionResponse));
     }
 
     @Operation(summary = "Get active PDU session count")
@@ -105,17 +111,19 @@ public class InventoryController {
 
     @Operation(summary = "Report node resource usage (upsert by nodeId)")
     @PostMapping("/nodes/resources")
-    public ResponseEntity<NodeResource> reportNodeResource(
+    public ResponseEntity<NodeResourceResponse> reportNodeResource(
             HttpServletRequest request,
-            @Valid @RequestBody NodeResource nodeResource) {
+            @Valid @RequestBody NodeResourceRequest nodeResourceRequest) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(nodeResourceService.reportNodeResource(tenantId, nodeResource));
+                .body(inventoryMapper.toNodeResourceResponse(
+                        nodeResourceService.reportNodeResource(
+                                tenantId, inventoryMapper.toNodeResourceEntity(nodeResourceRequest))));
     }
 
     @Operation(summary = "List all node resources with pagination")
     @GetMapping("/nodes/resources")
-    public ResponseEntity<Page<NodeResource>> listNodeResources(
+    public ResponseEntity<Page<NodeResourceResponse>> listNodeResources(
             HttpServletRequest request,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -123,15 +131,17 @@ public class InventoryController {
             @RequestParam(defaultValue = "DESC") Sort.Direction sortDir) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortDir, sortBy));
-        return ResponseEntity.ok(nodeResourceService.getNodeResources(tenantId, pageable));
+        return ResponseEntity.ok(
+                nodeResourceService.getNodeResources(tenantId, pageable).map(inventoryMapper::toNodeResourceResponse));
     }
 
     @Operation(summary = "Get node resource by node ID")
     @GetMapping("/nodes/resources/{nodeId}")
-    public ResponseEntity<NodeResource> getNodeResource(
+    public ResponseEntity<NodeResourceResponse> getNodeResource(
             HttpServletRequest request,
             @PathVariable String nodeId) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(nodeResourceService.getNodeResource(tenantId, nodeId));
+        return ResponseEntity.ok(
+                inventoryMapper.toNodeResourceResponse(nodeResourceService.getNodeResource(tenantId, nodeId)));
     }
 }

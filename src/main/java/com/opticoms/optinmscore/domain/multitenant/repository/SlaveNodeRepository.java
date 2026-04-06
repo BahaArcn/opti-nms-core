@@ -19,5 +19,7 @@ public interface SlaveNodeRepository extends MongoRepository<SlaveNode, String> 
 
     List<SlaveNode> findByTenantIdAndStatus(String tenantId, SlaveStatus status);
 
+    Page<SlaveNode> findByTenantIdAndStatus(String tenantId, SlaveStatus status, Pageable pageable);
+
     long countByTenantId(String tenantId);
 }

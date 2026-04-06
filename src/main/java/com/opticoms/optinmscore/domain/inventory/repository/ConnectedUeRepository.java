@@ -21,4 +21,6 @@ public interface ConnectedUeRepository extends MongoRepository<ConnectedUe, Stri
     long countByTenantId(String tenantId);
 
     long countByTenantIdAndStatus(String tenantId, ConnectedUe.UeStatus status);
+
+    List<ConnectedUe> findByTenantIdAndImsiIn(String tenantId, List<String> imsiList);
 }

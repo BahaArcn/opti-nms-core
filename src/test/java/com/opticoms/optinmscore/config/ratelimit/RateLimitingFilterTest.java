@@ -51,7 +51,7 @@ class RateLimitingFilterTest {
         when(rateLimiter.tryConsume(anyString(), eq(100), eq(60)))
                 .thenReturn(new RateLimiter.ConsumeResult(true, 99, 1700000060L, 100));
 
-        var request = apiRequest("/api/v1/subscriber/list");
+        var request = apiRequest("/api/v1/subscribers/list");
         var response = new MockHttpServletResponse();
 
         filter.doFilterInternal(request, response, filterChain);
@@ -67,7 +67,7 @@ class RateLimitingFilterTest {
         when(rateLimiter.tryConsume(anyString(), eq(100), eq(60)))
                 .thenReturn(new RateLimiter.ConsumeResult(false, 0, 1700000060L, 100));
 
-        var request = apiRequest("/api/v1/subscriber/list");
+        var request = apiRequest("/api/v1/subscribers/list");
         var response = new MockHttpServletResponse();
 
         filter.doFilterInternal(request, response, filterChain);
@@ -101,7 +101,7 @@ class RateLimitingFilterTest {
         when(rateLimiter.tryConsume(eq("user:admin"), eq(100), eq(60)))
                 .thenReturn(new RateLimiter.ConsumeResult(true, 50, 1700000060L, 100));
 
-        var request = apiRequest("/api/v1/subscriber/list");
+        var request = apiRequest("/api/v1/subscribers/list");
         var response = new MockHttpServletResponse();
 
         filter.doFilterInternal(request, response, filterChain);
@@ -114,7 +114,7 @@ class RateLimitingFilterTest {
         when(rateLimiter.tryConsume(eq("ip:192.168.1.100"), eq(100), eq(60)))
                 .thenReturn(new RateLimiter.ConsumeResult(true, 99, 1700000060L, 100));
 
-        var request = apiRequest("/api/v1/subscriber/list");
+        var request = apiRequest("/api/v1/subscribers/list");
         request.setRemoteAddr("192.168.1.100");
         var response = new MockHttpServletResponse();
 
@@ -128,7 +128,7 @@ class RateLimitingFilterTest {
         when(rateLimiter.tryConsume(eq("ip:127.0.0.1"), eq(100), eq(60)))
                 .thenReturn(new RateLimiter.ConsumeResult(true, 99, 1700000060L, 100));
 
-        var request = apiRequest("/api/v1/subscriber/list");
+        var request = apiRequest("/api/v1/subscribers/list");
         request.addHeader("X-Forwarded-For", "10.0.0.1, 172.16.0.1");
         var response = new MockHttpServletResponse();
 
@@ -152,7 +152,7 @@ class RateLimitingFilterTest {
     @Test
     void disabledRateLimit_skipsFilter() throws ServletException, IOException {
         props.setEnabled(false);
-        var request = apiRequest("/api/v1/subscriber/list");
+        var request = apiRequest("/api/v1/subscribers/list");
         assertThat(filter.shouldNotFilter(request)).isTrue();
     }
 
@@ -161,7 +161,7 @@ class RateLimitingFilterTest {
         when(rateLimiter.tryConsume(anyString(), eq(100), eq(60)))
                 .thenReturn(new RateLimiter.ConsumeResult(false, -1, 1700000060L, 100));
 
-        var request = apiRequest("/api/v1/subscriber/list");
+        var request = apiRequest("/api/v1/subscribers/list");
         var response = new MockHttpServletResponse();
 
         filter.doFilterInternal(request, response, filterChain);

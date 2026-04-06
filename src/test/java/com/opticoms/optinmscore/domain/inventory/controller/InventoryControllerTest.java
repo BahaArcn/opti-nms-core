@@ -1,10 +1,13 @@
 package com.opticoms.optinmscore.domain.inventory.controller;
 
+import com.opticoms.optinmscore.domain.inventory.dto.GNodeBResponse;
+import com.opticoms.optinmscore.domain.inventory.mapper.InventoryMapper;
 import com.opticoms.optinmscore.domain.inventory.model.GNodeB;
 import com.opticoms.optinmscore.domain.inventory.service.InventoryService;
 import com.opticoms.optinmscore.domain.inventory.service.NodeResourceService;
 import com.opticoms.optinmscore.security.JwtService;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -32,8 +35,22 @@ class InventoryControllerTest {
 
     @MockBean private InventoryService inventoryService;
     @MockBean private NodeResourceService nodeResourceService;
+    @MockBean private InventoryMapper inventoryMapper;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
+
+    @BeforeEach
+    void stubGNodeBMapper() {
+        when(inventoryMapper.toGNodeBResponse(any(GNodeB.class))).thenAnswer(inv -> {
+            GNodeB g = inv.getArgument(0);
+            GNodeBResponse r = new GNodeBResponse();
+            if (g != null) {
+                r.setGnbId(g.getGnbId());
+                r.setStatus(g.getStatus());
+            }
+            return r;
+        });
+    }
 
     @Test
     @WithMockUser(roles = "VIEWER")

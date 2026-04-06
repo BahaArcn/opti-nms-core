@@ -1,7 +1,9 @@
 package com.opticoms.optinmscore.domain.policy.controller;
 
 import com.opticoms.optinmscore.common.util.TenantContext;
-import com.opticoms.optinmscore.domain.policy.model.Policy;
+import com.opticoms.optinmscore.domain.policy.dto.PolicyRequest;
+import com.opticoms.optinmscore.domain.policy.dto.PolicyResponse;
+import com.opticoms.optinmscore.domain.policy.mapper.PolicyMapper;
 import com.opticoms.optinmscore.domain.policy.service.PolicyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,20 +25,22 @@ import org.springframework.web.bind.annotation.*;
 public class PolicyController {
 
     private final PolicyService policyService;
+    private final PolicyMapper policyMapper;
 
     @Operation(summary = "Create a new policy")
     @PostMapping
-    public ResponseEntity<Policy> createPolicy(
+    public ResponseEntity<PolicyResponse> createPolicy(
             HttpServletRequest request,
-            @Valid @RequestBody Policy policy) {
+            @Valid @RequestBody PolicyRequest policyRequest) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(policyService.createPolicy(tenantId, policy));
+                .body(policyMapper.toResponse(
+                        policyService.createPolicy(tenantId, policyMapper.toEntity(policyRequest))));
     }
 
     @Operation(summary = "List all policies with pagination")
     @GetMapping
-    public ResponseEntity<Page<Policy>> listPolicies(
+    public ResponseEntity<Page<PolicyResponse>> listPolicies(
             HttpServletRequest request,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -44,26 +48,29 @@ public class PolicyController {
             @RequestParam(defaultValue = "DESC") Sort.Direction sortDir) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortDir, sortBy));
-        return ResponseEntity.ok(policyService.listPolicies(tenantId, pageable));
+        return ResponseEntity.ok(policyService.listPolicies(tenantId, pageable)
+                .map(policyMapper::toResponse));
     }
 
     @Operation(summary = "Get policy by ID")
     @GetMapping("/{id}")
-    public ResponseEntity<Policy> getPolicy(
+    public ResponseEntity<PolicyResponse> getPolicy(
             HttpServletRequest request,
             @PathVariable String id) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(policyService.getPolicy(tenantId, id));
+        return ResponseEntity.ok(policyMapper.toResponse(
+                policyService.getPolicy(tenantId, id)));
     }
 
     @Operation(summary = "Update policy by ID")
     @PutMapping("/{id}")
-    public ResponseEntity<Policy> updatePolicy(
+    public ResponseEntity<PolicyResponse> updatePolicy(
             HttpServletRequest request,
             @PathVariable String id,
-            @Valid @RequestBody Policy policy) {
+            @Valid @RequestBody PolicyRequest policyRequest) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(policyService.updatePolicy(tenantId, id, policy));
+        return ResponseEntity.ok(policyMapper.toResponse(
+                policyService.updatePolicy(tenantId, id, policyMapper.toEntity(policyRequest))));
     }
 
     @Operation(summary = "Delete policy by ID")

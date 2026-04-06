@@ -12,15 +12,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * AmfConfig + GlobalConfig → nssfcfg.yaml string üretir.
+ * Renders AmfConfig + GlobalConfig into nssfcfg.yaml.
  *
- * LLD Parametre → YAML Path eşlemesi (Tablo 3 + Tablo 5):
+ * LLD parameter → YAML path (tables 3 + 5):
  *
  *  GlobalConfig.maxSupportedDevices    → global.max.ue
  *  AmfConfig.supportedSlices           → nssf.sbi.client.nsi[*].s_nssai
  *
- *  NSSF'in rolü: UE'nin istediği slice'ı hangi NRF'in hizmet verdiğini söyler.
- *  Her slice için bir NSI (Network Slice Instance) entry üretilir.
+ *  NSSF maps each requested slice to the NRF that serves it.
+ *  One NSI (Network Slice Instance) entry is emitted per slice.
  */
 @Component
 public class NssfYamlRenderer {
@@ -35,9 +35,8 @@ public class NssfYamlRenderer {
     }
 
     /**
-     * @param amf    AmfConfig    — Slice listesi için
-     * @param global GlobalConfig — max.ue için
-     * @return nssfcfg.yaml içeriği (String)
+     * @param amf    slice list
+     * @param global global limits (e.g. max.ue)
      */
     public String render(AmfConfig amf, GlobalConfig global) {
         Map<String, Object> root = new LinkedHashMap<>();
@@ -59,7 +58,7 @@ public class NssfYamlRenderer {
         // ── nssf ─────────────────────────────────────────────────────────────
         Map<String, Object> nssfSection = new LinkedHashMap<>();
 
-        // sbi: NSSF'in hem server hem client konfigürasyonu
+        // sbi: NSSF server + client
         nssfSection.put("sbi", buildSbiSection(amf));
 
         root.put("nssf", nssfSection);
@@ -79,17 +78,17 @@ public class NssfYamlRenderer {
         servers.add(server);
         sbi.put("server", servers);
 
-        // Client: SCP + NSI (NRF başvurusu, her slice için)
+        // Client: SCP + NSI (NRF URI per slice)
         Map<String, Object> client = new LinkedHashMap<>();
 
-        // SCP referansı
+        // SCP
         List<Map<String, Object>> scpList = new ArrayList<>();
         Map<String, Object> scp = new LinkedHashMap<>();
         scp.put("uri", "http://scp-nscp:80");
         scpList.add(scp);
         client.put("scp", scpList);
 
-        // NSI: Her slice için bir entry → hangi NRF'e gidileceğini söyler
+        // NSI: one entry per slice → target NRF
         // LLD Tablo 5: Slice-List (SST/SD) → nssf.yaml
         List<Map<String, Object>> nsiList = new ArrayList<>();
         for (AmfConfig.Slice slice : amf.getSupportedSlices()) {

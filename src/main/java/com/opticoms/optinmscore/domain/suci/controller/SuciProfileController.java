@@ -1,6 +1,9 @@
 package com.opticoms.optinmscore.domain.suci.controller;
 
 import com.opticoms.optinmscore.common.util.TenantContext;
+import com.opticoms.optinmscore.domain.suci.dto.SuciProfileRequest;
+import com.opticoms.optinmscore.domain.suci.dto.SuciProfileResponse;
+import com.opticoms.optinmscore.domain.suci.mapper.SuciProfileMapper;
 import com.opticoms.optinmscore.domain.suci.model.SuciProfile;
 import com.opticoms.optinmscore.domain.suci.service.SuciProfileService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,20 +29,22 @@ import java.util.List;
 public class SuciProfileController {
 
     private final SuciProfileService suciProfileService;
+    private final SuciProfileMapper suciProfileMapper;
 
     @Operation(summary = "Create a new SUCI profile (ADMIN only)")
     @PostMapping
-    public ResponseEntity<SuciProfile> create(
+    public ResponseEntity<SuciProfileResponse> create(
             HttpServletRequest request,
-            @Valid @RequestBody SuciProfile profile) {
+            @Valid @RequestBody SuciProfileRequest profileRequest) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(suciProfileService.create(tenantId, profile));
+                .body(suciProfileMapper.toResponse(
+                        suciProfileService.create(tenantId, suciProfileMapper.toEntity(profileRequest))));
     }
 
     @Operation(summary = "List SUCI profiles with pagination")
     @GetMapping
-    public ResponseEntity<Page<SuciProfile>> list(
+    public ResponseEntity<Page<SuciProfileResponse>> list(
             HttpServletRequest request,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size,
@@ -47,44 +52,49 @@ public class SuciProfileController {
             @RequestParam(defaultValue = "ASC") Sort.Direction sortDir) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortDir, sortBy));
-        return ResponseEntity.ok(suciProfileService.list(tenantId, pageable));
+        return ResponseEntity.ok(suciProfileService.list(tenantId, pageable)
+                .map(suciProfileMapper::toResponse));
     }
 
     @Operation(summary = "Get SUCI profile by ID")
     @GetMapping("/{id}")
-    public ResponseEntity<SuciProfile> getById(
+    public ResponseEntity<SuciProfileResponse> getById(
             HttpServletRequest request,
             @PathVariable String id) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(suciProfileService.getById(tenantId, id));
+        return ResponseEntity.ok(suciProfileMapper.toResponse(
+                suciProfileService.getById(tenantId, id)));
     }
 
     @Operation(summary = "Filter profiles by protection scheme (NULL_SCHEME, PROFILE_A, PROFILE_B)")
     @GetMapping("/scheme/{scheme}")
-    public ResponseEntity<List<SuciProfile>> listByScheme(
+    public ResponseEntity<List<SuciProfileResponse>> listByScheme(
             HttpServletRequest request,
             @PathVariable SuciProfile.ProtectionScheme scheme) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(suciProfileService.listByScheme(tenantId, scheme));
+        return ResponseEntity.ok(suciProfileMapper.toResponseList(
+                suciProfileService.listByScheme(tenantId, scheme)));
     }
 
     @Operation(summary = "Filter profiles by key status (ACTIVE, INACTIVE, REVOKED)")
     @GetMapping("/status/{status}")
-    public ResponseEntity<List<SuciProfile>> listByStatus(
+    public ResponseEntity<List<SuciProfileResponse>> listByStatus(
             HttpServletRequest request,
             @PathVariable SuciProfile.KeyStatus status) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(suciProfileService.listByStatus(tenantId, status));
+        return ResponseEntity.ok(suciProfileMapper.toResponseList(
+                suciProfileService.listByStatus(tenantId, status)));
     }
 
     @Operation(summary = "Update a SUCI profile (cannot update REVOKED profiles)")
     @PutMapping("/{id}")
-    public ResponseEntity<SuciProfile> update(
+    public ResponseEntity<SuciProfileResponse> update(
             HttpServletRequest request,
             @PathVariable String id,
-            @Valid @RequestBody SuciProfile profile) {
+            @Valid @RequestBody SuciProfileRequest profileRequest) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(suciProfileService.update(tenantId, id, profile));
+        return ResponseEntity.ok(suciProfileMapper.toResponse(
+                suciProfileService.update(tenantId, id, suciProfileMapper.toEntity(profileRequest))));
     }
 
     @Operation(summary = "Delete a SUCI profile")
@@ -99,11 +109,12 @@ public class SuciProfileController {
 
     @Operation(summary = "Revoke an HNET key (marks as REVOKED, irreversible)")
     @PostMapping("/{id}/revoke")
-    public ResponseEntity<SuciProfile> revoke(
+    public ResponseEntity<SuciProfileResponse> revoke(
             HttpServletRequest request,
             @PathVariable String id) {
         String tenantId = TenantContext.getCurrentTenantId(request);
-        return ResponseEntity.ok(suciProfileService.revokeKey(tenantId, id));
+        return ResponseEntity.ok(suciProfileMapper.toResponse(
+                suciProfileService.revokeKey(tenantId, id)));
     }
 
     @Operation(summary = "Get total SUCI profile count")

@@ -12,7 +12,7 @@ import com.opticoms.optinmscore.domain.observability.model.Alarm;
 import com.opticoms.optinmscore.domain.observability.repository.AlarmRepository;
 import com.opticoms.optinmscore.domain.subscriber.repository.SubscriberRepository;
 import com.opticoms.optinmscore.domain.tenant.model.Tenant;
-import com.opticoms.optinmscore.domain.tenant.repository.TenantRepository;
+import com.opticoms.optinmscore.domain.tenant.service.TenantService;
 import com.opticoms.optinmscore.integration.open5gs.Open5gsClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,7 +40,7 @@ class DashboardServiceTest {
     @Mock private PduSessionRepository pduSessionRepository;
     @Mock private AlarmRepository alarmRepository;
     @Mock private Open5gsClient open5gsClient;
-    @Mock private TenantRepository tenantRepository;
+    @Mock private TenantService tenantService;
     @Mock private EdgeLocationRepository edgeLocationRepository;
     @Mock private LicenseService licenseService;
 
@@ -58,7 +58,7 @@ class DashboardServiceTest {
         testTenant.setSmfUrl(SMF_URL);
         testTenant.setActive(true);
 
-        when(tenantRepository.findByTenantId(TENANT_ID)).thenReturn(Optional.of(testTenant));
+        when(tenantService.getTenant(TENANT_ID)).thenReturn(testTenant);
     }
 
     @Test

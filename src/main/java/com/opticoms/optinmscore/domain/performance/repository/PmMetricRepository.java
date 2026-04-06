@@ -9,9 +9,18 @@ import java.util.List;
 @Repository
 public interface PmMetricRepository extends MongoRepository<PmMetric, String> {
 
-    // Tarih aralığı sorgusu artık Long (milisaniye) alıyor
+    /** Range query uses epoch milliseconds for start/end. */
     List<PmMetric> findByTenantIdAndMetricNameAndTimestampBetweenOrderByTimestampDesc(
             String tenantId, String metricName, Long startTime, Long endTime);
 
     PmMetric findFirstByTenantIdAndMetricNameOrderByTimestampDesc(String tenantId, String metricName);
+
+    PmMetric findFirstByTenantIdAndMetricNameAndTimestampBetweenOrderByTimestampAsc(
+            String tenantId, String metricName, Long startTime, Long endTime);
+
+    PmMetric findFirstByTenantIdAndMetricNameAndTimestampBetweenOrderByTimestampDesc(
+            String tenantId, String metricName, Long startTime, Long endTime);
+
+    List<PmMetric> findTop2ByTenantIdAndMetricNameAndTimestampBetweenOrderByTimestampDesc(
+            String tenantId, String metricName, Long startTime, Long endTime);
 }

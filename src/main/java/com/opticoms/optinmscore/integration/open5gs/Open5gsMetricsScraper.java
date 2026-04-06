@@ -3,7 +3,7 @@ package com.opticoms.optinmscore.integration.open5gs;
 import com.opticoms.optinmscore.domain.performance.model.PmMetric;
 import com.opticoms.optinmscore.domain.performance.service.PmService;
 import com.opticoms.optinmscore.domain.tenant.model.Tenant;
-import com.opticoms.optinmscore.domain.tenant.repository.TenantRepository;
+import com.opticoms.optinmscore.domain.tenant.service.TenantService;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.ExecWatch;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +37,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class Open5gsMetricsScraper {
 
-    private final TenantRepository tenantRepository;
+    private final TenantService tenantService;
     private final PmService pmService;
     private final RestTemplate restTemplate;
     private final KubernetesClient k8sClient;
@@ -73,9 +73,9 @@ public class Open5gsMetricsScraper {
     );
 
     @Scheduled(fixedRateString = "${open5gs.metrics.scrape-interval-ms:30000}")
-    @SchedulerLock(name = "upf_metrics_scrape", lockAtMostFor = "28s", lockAtLeastFor = "10s")
+    @SchedulerLock(name = "upf_metrics_scrape", lockAtMostFor = "55s", lockAtLeastFor = "10s")
     public void scrapeUpfMetrics() {
-        List<Tenant> tenants = tenantRepository.findByActiveTrue();
+        List<Tenant> tenants = tenantService.getActiveTenants();
         for (Tenant tenant : tenants) {
             String tenantId = tenant.getTenantId();
 

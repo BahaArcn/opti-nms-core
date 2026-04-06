@@ -16,28 +16,21 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * Renderer katmanını orkestre eder.
+ * Orchestrates YAML renderers for Open5GS network functions.
  *
- * Sorumlulukları:
- * 1. Mevcut *ConfigService sınıflarını kullanarak MongoDB'den config'leri çeker.
- * 2. İlgili Renderer sınıfına doğru config nesnelerini iletir.
- * 3. Sonuçları RenderedConfigs DTO'suna paketler.
- *
- * Controller bu servisi çağırır; renderer'ları doğrudan görmez.
- * Bu sayede ileride farklı bir render stratejisi (Freemarker, template dosyası)
- * eklenirse controller kodu değişmez.
+ * Loads configs via {@code *ConfigService} from MongoDB, invokes the appropriate renderer,
+ * and wraps results in {@link com.opticoms.optinmscore.integration.open5gs.deploy.dto.RenderedConfigs}.
+ * Controllers depend on this service only, so the rendering strategy can change without controller edits.
  */
 @Service
 @RequiredArgsConstructor
 public class ConfigRenderService {
 
-    // Mevcut CRUD servisleri — DB erişimi bunlar üzerinden
-    private final NetworkConfigService networkConfigService;   // GlobalConfig
+    private final NetworkConfigService networkConfigService;
     private final AmfConfigService amfConfigService;
     private final SmfConfigService smfConfigService;
     private final UpfConfigService upfConfigService;
 
-    // Renderer'lar — her NF için bağımsız
     private final AmfYamlRenderer amfRenderer;
     private final SmfYamlRenderer smfRenderer;
     private final UpfYamlRenderer upfRenderer;
@@ -48,14 +41,11 @@ public class ConfigRenderService {
     private final SgwuYamlRenderer sgwuRenderer;
 
     /**
-     * Tüm NF'ler için YAML üretir.
-     * deploy/all ve preview endpoint'leri bu metodu çağırır.
+     * Renders YAML for all network functions ({@code /deploy/all}, {@code /preview}).
      *
      * @param tenantId JWT-derived tenant identifier
-     * @return Tüm NF YAML'larını içeren RenderedConfigs
      */
     public RenderedConfigs renderAll(String tenantId) {
-        // DB'den en güncel config'leri çek (desired-state mantığı)
         GlobalConfig global = networkConfigService.getGlobalConfig(tenantId);
         AmfConfig amf       = amfConfigService.getAmfConfig(tenantId);
         SmfConfig smf       = smfConfigService.getSmfConfig(tenantId);
@@ -78,10 +68,7 @@ public class ConfigRenderService {
         return builder.build();
     }
 
-    /**
-     * Sadece AMF için YAML üretir.
-     * deploy/amf endpoint'i bu metodu çağırır.
-     */
+    /** Renders AMF YAML only ({@code /deploy/amf}). */
     public RenderedConfigs renderAmfOnly(String tenantId) {
         GlobalConfig global = networkConfigService.getGlobalConfig(tenantId);
         AmfConfig amf       = amfConfigService.getAmfConfig(tenantId);
@@ -91,13 +78,11 @@ public class ConfigRenderService {
                 .build();
     }
 
-    /**
-     * Sadece SMF için YAML üretir.
-     */
+    /** Renders SMF YAML only (loads UPF for PFCP client address). */
     public RenderedConfigs renderSmfOnly(String tenantId) {
         GlobalConfig global = networkConfigService.getGlobalConfig(tenantId);
         SmfConfig smf       = smfConfigService.getSmfConfig(tenantId);
-        UpfConfig upf       = upfConfigService.getUpfConfig(tenantId); // PFCP address için
+        UpfConfig upf       = upfConfigService.getUpfConfig(tenantId);
 
         return RenderedConfigs.builder()
                 .smfYaml(smfRenderer.render(smf, global, upf))
@@ -105,8 +90,7 @@ public class ConfigRenderService {
     }
 
     /**
-     * Sadece UPF için YAML + wrapper.sh üretir.
-     * Gap 3: UPF renderer SmfConfig'e de bağımlı, ikisi de çekiliyor.
+     * Renders UPF YAML and wrapper.sh (Gap 3: requires SmfConfig as well as UpfConfig).
      */
     public RenderedConfigs renderUpfOnly(String tenantId) {
         GlobalConfig global = networkConfigService.getGlobalConfig(tenantId);

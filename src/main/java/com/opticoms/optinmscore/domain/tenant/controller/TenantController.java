@@ -2,16 +2,16 @@ package com.opticoms.optinmscore.domain.tenant.controller;
 
 import com.opticoms.optinmscore.domain.system.model.User;
 import com.opticoms.optinmscore.domain.system.service.UserService;
+import com.opticoms.optinmscore.domain.tenant.dto.TenantOnboardRequest;
+import com.opticoms.optinmscore.domain.tenant.dto.TenantOnboardResponse;
+import com.opticoms.optinmscore.domain.tenant.dto.TenantRequest;
+import com.opticoms.optinmscore.domain.tenant.dto.TenantResponse;
+import com.opticoms.optinmscore.domain.tenant.mapper.TenantMapper;
 import com.opticoms.optinmscore.domain.tenant.model.Tenant;
 import com.opticoms.optinmscore.domain.tenant.service.TenantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -29,6 +29,7 @@ public class TenantController {
 
     private final TenantService tenantService;
     private final UserService userService;
+    private final TenantMapper tenantMapper;
 
     @Operation(summary = "Onboard a new tenant with its initial admin user")
     @PostMapping
@@ -67,7 +68,7 @@ public class TenantController {
         }
 
         TenantOnboardResponse response = new TenantOnboardResponse();
-        response.setTenant(saved);
+        response.setTenant(tenantMapper.toResponse(saved));
         response.setAdminUsername(admin.getUsername());
         response.setAdminEmail(admin.getEmail());
 
@@ -76,65 +77,32 @@ public class TenantController {
 
     @Operation(summary = "List all tenants")
     @GetMapping
-    public ResponseEntity<List<Tenant>> listTenants() {
-        return ResponseEntity.ok(tenantService.listTenants());
+    public ResponseEntity<List<TenantResponse>> listTenants() {
+        return ResponseEntity.ok(tenantMapper.toResponseList(tenantService.listTenants()));
     }
 
     @Operation(summary = "Get tenant by MongoDB document id")
     @GetMapping("/{id}")
-    public ResponseEntity<Tenant> getTenant(@PathVariable String id) {
-        return ResponseEntity.ok(tenantService.getTenantById(id));
+    public ResponseEntity<TenantResponse> getTenant(@PathVariable String id) {
+        return ResponseEntity.ok(tenantMapper.toResponse(tenantService.getTenantById(id)));
     }
 
     @Operation(summary = "Update tenant by MongoDB document id")
     @PutMapping("/{id}")
-    public ResponseEntity<Tenant> updateTenant(
+    public ResponseEntity<TenantResponse> updateTenant(
             @PathVariable String id,
-            @Valid @RequestBody Tenant tenant) {
+            @Valid @RequestBody TenantRequest tenantRequest) {
         Tenant existing = tenantService.getTenantById(id);
-        return ResponseEntity.ok(tenantService.updateTenant(existing.getTenantId(), tenant));
+        Tenant entity = tenantMapper.toEntity(tenantRequest);
+        return ResponseEntity.ok(tenantMapper.toResponse(
+                tenantService.updateTenant(existing.getTenantId(), entity)));
     }
 
     @Operation(summary = "Deactivate tenant (soft delete) by MongoDB document id")
     @DeleteMapping("/{id}")
-    public ResponseEntity<Tenant> deactivateTenant(@PathVariable String id) {
+    public ResponseEntity<TenantResponse> deactivateTenant(@PathVariable String id) {
         Tenant existing = tenantService.getTenantById(id);
-        return ResponseEntity.ok(tenantService.deactivateTenant(existing.getTenantId()));
-    }
-
-    @Data
-    public static class TenantOnboardRequest {
-        @NotBlank
-        @Pattern(regexp = "^[A-Z]{4}-\\d{4}/\\d{4}/\\d{2}$",
-                message = "Tenant ID must follow format: XXXX-DDDD/DDDD/DD")
-        private String tenantId;
-
-        @NotBlank
-        private String name;
-
-        @NotBlank
-        private String amfUrl;
-
-        @NotBlank
-        private String smfUrl;
-
-        @NotBlank
-        private String adminUsername;
-
-        @NotBlank @Email
-        private String adminEmail;
-
-        @NotBlank @Size(min = 8, message = "Password must be at least 8 characters")
-        private String adminPassword;
-
-        private String open5gsMongoUri;
-        private String upfMetricsUrl;
-    }
-
-    @Data
-    public static class TenantOnboardResponse {
-        private Tenant tenant;
-        private String adminUsername;
-        private String adminEmail;
+        return ResponseEntity.ok(tenantMapper.toResponse(
+                tenantService.deactivateTenant(existing.getTenantId())));
     }
 }

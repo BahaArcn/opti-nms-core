@@ -1,6 +1,8 @@
 package com.opticoms.optinmscore.domain.multitenant.controller;
 
 import com.opticoms.optinmscore.common.util.TenantContext;
+import com.opticoms.optinmscore.domain.multitenant.dto.SlaveNodeResponse;
+import com.opticoms.optinmscore.domain.multitenant.mapper.SlaveNodeMapper;
 import com.opticoms.optinmscore.domain.multitenant.model.SlaveNode;
 import com.opticoms.optinmscore.domain.multitenant.model.SlaveNode.SlaveStatus;
 import com.opticoms.optinmscore.domain.multitenant.service.MasterService;
@@ -26,14 +28,15 @@ import java.util.Map;
 public class MasterController {
 
     private final MasterService masterService;
+    private final SlaveNodeMapper slaveNodeMapper;
 
     @PostMapping("/register")
-    public ResponseEntity<SlaveNode> registerSlave(
+    public ResponseEntity<SlaveNodeResponse> registerSlave(
             HttpServletRequest request,
             @Valid @RequestBody RegisterSlaveRequest body) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         SlaveNode node = masterService.registerSlave(tenantId, body.getSlaveAddress(), body.getSlaveTenantId());
-        return ResponseEntity.status(HttpStatus.CREATED).body(node);
+        return ResponseEntity.status(HttpStatus.CREATED).body(slaveNodeMapper.toResponse(node));
     }
 
     @DeleteMapping("/{slaveAddress}")
@@ -55,13 +58,14 @@ public class MasterController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<SlaveNode>> listSlaves(
+    public ResponseEntity<Page<SlaveNodeResponse>> listSlaves(
             HttpServletRequest request,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         String tenantId = TenantContext.getCurrentTenantId(request);
         Pageable pageable = PageRequest.of(page, size);
-        return ResponseEntity.ok(masterService.listSlaves(tenantId, pageable));
+        return ResponseEntity.ok(masterService.listSlaves(tenantId, pageable)
+                .map(slaveNodeMapper::toResponse));
     }
 
     @PostMapping("/push-config")

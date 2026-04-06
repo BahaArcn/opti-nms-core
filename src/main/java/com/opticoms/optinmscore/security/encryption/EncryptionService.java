@@ -1,33 +1,46 @@
 package com.opticoms.optinmscore.security.encryption;
 
+import com.opticoms.optinmscore.config.encryption.EncryptionMetadata;
 import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
+import javax.crypto.Mac;
 import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.security.spec.KeySpec;
 import java.util.Base64;
 
+@Slf4j
 @Service
 public class EncryptionService {
 
-    // Bu anahtar Environment Variable'dan gelmeli.
-    // Eğer gelmezse uygulama güvenli başlamaz.
     @Value("${app.security.master-key}")
     private String masterKeyString;
 
-    private SecretKey secretKey; // İşlenmiş, güvenli anahtar
+    private final MongoTemplate mongoTemplate;
+
+    private SecretKey secretKey;
     private final SecureRandom secureRandom = new SecureRandom();
 
     private static final String ALGORITHM = "AES/GCM/NoPadding";
-    private static final int GCM_IV_LENGTH = 12; // 12 bytes IV (Endüstri standardı)
-    private static final int GCM_TAG_LENGTH = 128; // 128 bit authentication tag
+    private static final int GCM_IV_LENGTH = 12;
+    private static final int GCM_TAG_LENGTH = 128;
+    private static final int PBKDF2_ITERATIONS = 100_000;
+
+    public EncryptionService(@Lazy MongoTemplate mongoTemplate) {
+        this.mongoTemplate = mongoTemplate;
+    }
 
     @PostConstruct
     public void init() {
@@ -37,32 +50,45 @@ public class EncryptionService {
                     "Application cannot start without a valid encryption key.");
         }
         try {
-            // 1. Gelen anahtarı ne olursa olsun SHA-256 ile 32 byte (256 bit) sabit uzunluğa getiriyoruz.
-            // Bu sayede "Key length" hatalarını önleriz.
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] keyBytes = digest.digest(masterKeyString.getBytes(StandardCharsets.UTF_8));
+            byte[] salt = resolveOrCreateSalt();
+            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            KeySpec spec = new PBEKeySpec(
+                    masterKeyString.toCharArray(), salt, PBKDF2_ITERATIONS, 256);
+            byte[] keyBytes = factory.generateSecret(spec).getEncoded();
             this.secretKey = new SecretKeySpec(keyBytes, "AES");
         } catch (Exception e) {
             throw new RuntimeException("Could not initialize encryption key", e);
         }
     }
 
+    private byte[] resolveOrCreateSalt() {
+        EncryptionMetadata meta = mongoTemplate.findById("MASTER", EncryptionMetadata.class);
+        if (meta != null) {
+            return Base64.getDecoder().decode(meta.getSaltBase64());
+        }
+        byte[] newSalt = new byte[16];
+        new SecureRandom().nextBytes(newSalt);
+        meta = new EncryptionMetadata();
+        meta.setId("MASTER");
+        meta.setSaltBase64(Base64.getEncoder().encodeToString(newSalt));
+        mongoTemplate.save(meta);
+        log.info("New encryption salt generated and persisted to MongoDB");
+        return newSalt;
+    }
+
     public String encrypt(String plainText) {
         if (plainText == null || plainText.isEmpty()) return plainText;
         try {
-            // 2. Her işlem için rastgele bir IV (Initialization Vector) oluştur.
             byte[] iv = new byte[GCM_IV_LENGTH];
             secureRandom.nextBytes(iv);
 
-            // 3. Şifreleme motorunu GCM modunda başlat
             Cipher cipher = Cipher.getInstance(ALGORITHM);
             GCMParameterSpec parameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
             cipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
 
             byte[] cipherText = cipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
 
-            // 4. IV ve Şifreli Veriyi birleştir: [IV (12 byte)] + [Şifreli Veri]
-            // Çözerken ilk 12 byte'ı ayırıp IV olarak kullanacağız.
+            // Concatenate IV (12 bytes) + ciphertext for storage; decrypt splits the prefix as IV.
             ByteBuffer byteBuffer = ByteBuffer.allocate(iv.length + cipherText.length);
             byteBuffer.put(iv);
             byteBuffer.put(cipherText);
@@ -74,14 +100,16 @@ public class EncryptionService {
     }
 
     /**
-     * Deterministic SHA-256 hash for searchable encrypted fields.
-     * Same input always produces the same hash, enabling DB lookups.
+     * Keyed HMAC-SHA256 hash for searchable encrypted fields.
+     * Same input + same key always produces the same hash, enabling DB lookups.
+     * Without the key, rainbow table attacks are infeasible.
      */
     public String hash(String plainText) {
         if (plainText == null || plainText.isEmpty()) return plainText;
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(plainText.getBytes(StandardCharsets.UTF_8));
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(secretKey);
+            byte[] hashBytes = mac.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
             StringBuilder hex = new StringBuilder();
             for (byte b : hashBytes) {
                 hex.append(String.format("%02x", b));
@@ -97,16 +125,14 @@ public class EncryptionService {
         try {
             byte[] decodedBytes = Base64.getDecoder().decode(encryptedText);
 
-            // 5. Veriyi parçala: Önce IV'yi al, kalanı ciphertext.
             ByteBuffer byteBuffer = ByteBuffer.wrap(decodedBytes);
 
             byte[] iv = new byte[GCM_IV_LENGTH];
-            byteBuffer.get(iv); // İlk 12 byte'ı oku
+            byteBuffer.get(iv);
 
             byte[] cipherText = new byte[byteBuffer.remaining()];
-            byteBuffer.get(cipherText); // Geri kalanı oku
+            byteBuffer.get(cipherText);
 
-            // 6. Çözme işlemini başlat
             Cipher cipher = Cipher.getInstance(ALGORITHM);
             GCMParameterSpec parameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
             cipher.init(Cipher.DECRYPT_MODE, secretKey, parameterSpec);
@@ -115,7 +141,6 @@ public class EncryptionService {
             return new String(plainTextBytes, StandardCharsets.UTF_8);
 
         } catch (Exception e) {
-            // Eğer anahtar yanlışsa veya veri bozulmuşsa burası patlar (GCM Integrity Check)
             throw new RuntimeException("Error while decrypting data. Key might be wrong or data corrupted.", e);
         }
     }

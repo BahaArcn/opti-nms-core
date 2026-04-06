@@ -12,11 +12,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * AmfConfig + GlobalConfig → mmecfg.yaml string üretir. (4G ve HYBRID mod)
+ * Renders AmfConfig + GlobalConfig into mmecfg.yaml (4G and HYBRID modes).
  *
- * GAP-01 çözümü: LLD Tablo 6 — 4G Core Parameters
+ * GAP-01: LLD table 6 — 4G core parameters.
  *
- * LLD Parametre → YAML Path eşlemesi (Tablo 3 + Tablo 4 + Tablo 6):
+ * LLD parameter → YAML path (tables 3 + 4 + 6):
  *
  *  GlobalConfig.maxSupportedDevices        → global.max.ue
  *  GlobalConfig.maxSupportedGNBs           → global.max.gnb
@@ -27,12 +27,12 @@ import java.util.Map;
  *  AmfConfig.mmeId.mmegi / mmec            → mme.gummei[*].mme_gid / mme_code
  *  AmfConfig.supportedPlmns                → mme.gummei[*].plmn_id
  *  AmfConfig.s1cInterfaceIp                → mme.s1ap.server[0].address
- *    (null ise dev: s1c kullanılır)
+ *    (if null, uses dev: s1c)
  *  AmfConfig.supportedTais                 → mme.tai[*].plmn_id + tac
  *  AmfConfig.securityParameters            → mme.security.integrity_order / ciphering_order (4G)
  *  AmfConfig.nasTimers4g.t3402/t3412/t3423 → mme.time.t3402/t3412/t3423.value
  *
- *  GTPC client: K8s service DNS üzerinden SGWC ve SMF(PGW-C)
+ *  GTP-C client: SGWC and SMF (PGW-C) via K8s service DNS
  */
 @Component
 public class MmeYamlRenderer {
@@ -47,9 +47,8 @@ public class MmeYamlRenderer {
     }
 
     /**
-     * @param amf    AmfConfig — 4G MME parametreleri
-     * @param global GlobalConfig — network_name, max.ue/gnb için
-     * @return mmecfg.yaml içeriği (String)
+     * @param amf    4G MME-related fields (same document as AMF in this model)
+     * @param global network display names and global limits
      */
     public String render(AmfConfig amf, GlobalConfig global) {
         Map<String, Object> root = new LinkedHashMap<>();
@@ -71,14 +70,14 @@ public class MmeYamlRenderer {
         // ── mme ─────────────────────────────────────────────────────────────
         Map<String, Object> mmeSection = new LinkedHashMap<>();
 
-        // freeDiameter: 4G Diameter protokol konfigürasyonu (sabit yol)
+        // freeDiameter: 4G Diameter config (fixed path)
         mmeSection.put("freeDiameter", "/open5gs/install/etc/freeDiameter/mme.conf");
 
-        // s1ap: eNB ↔ MME kontrol uçağı
+        // s1ap: eNB ↔ MME control plane
         // LLD Tablo 6: S1ap-Addr → mme.yaml
         mmeSection.put("s1ap", buildS1apSection(amf.getS1cInterfaceIp()));
 
-        // gtpc: 4G GTP-C — SGWC ve SMF(PGW-C) ile iletişim
+        // gtpc: 4G GTP-C toward SGWC and SMF (PGW-C)
         mmeSection.put("gtpc", buildGtpcSection());
 
         // metrics: Prometheus scrape endpoint
@@ -90,19 +89,19 @@ public class MmeYamlRenderer {
         // tai: Global TAI > AMF fallback
         mmeSection.put("tai", buildTaiList(global, amf));
 
-        // security: 4G bütünlük ve şifreleme algoritmaları (EIA/EEA)
+        // security: 4G integrity and ciphering (EIA/EEA)
         // LLD Tablo 6: Sec-Order-4g → mme.yaml
         mmeSection.put("security", buildSecuritySection(amf));
 
-        // network_name: 4G UE status bar'ında görünen ağ adı
+        // network_name: display name on the 4G UE
         // LLD Tablo 3: Network-Name → mme.yaml (4G)
         mmeSection.put("network_name", buildNetworkNameSection(global));
 
-        // mme_name: MME'nin 4GC içindeki ismi
+        // mme_name: MME name inside the 4G core
         // LLD Tablo 6: Mme-Name → mme.yaml
         mmeSection.put("mme_name", amf.getMmeName() != null ? amf.getMmeName() : "Opti4GC-mme0");
 
-        // time: NAS timer konfigürasyonu (4G)
+        // time: NAS timers (4G)
         // LLD Tablo 6: Nas-Timers-4g (T3402, T3412, T3423) → mme.yaml
         mmeSection.put("time", buildTimeSection(amf));
 
@@ -110,8 +109,6 @@ public class MmeYamlRenderer {
 
         return yaml.dump(root);
     }
-
-    // ── Private builder metodları ────────────────────────────────────────────
 
     private Map<String, Object> buildS1apSection(String s1cIp) {
         Map<String, Object> s1ap = new LinkedHashMap<>();
@@ -121,7 +118,6 @@ public class MmeYamlRenderer {
         if (s1cIp != null && !s1cIp.isBlank()) {
             server.put("address", s1cIp);
         } else {
-            // K8s ortamında interface adı: s1c
             server.put("dev", "s1c");
         }
         servers.add(server);
@@ -130,8 +126,8 @@ public class MmeYamlRenderer {
     }
 
     private Map<String, Object> buildGtpcSection() {
-        // GTP-C server: MME kendi tarafı
-        // GTP-C client: SGWC ve SMF(PGW-C) — K8s service DNS
+        // GTP-C server: MME side
+        // GTP-C client: SGWC and SMF (PGW-C) — K8s service DNS
         Map<String, Object> gtpc = new LinkedHashMap<>();
 
         List<Map<String, Object>> servers = new ArrayList<>();
@@ -148,7 +144,7 @@ public class MmeYamlRenderer {
         sgwcList.add(sgwc);
         client.put("sgwc", sgwcList);
 
-        // SMF, PGW-C olarak çalışır (CUPS: combined SGWC/PGWC)
+        // SMF acts as PGW-C (CUPS combined SGWC/PGW-C)
         List<Map<String, Object>> smfList = new ArrayList<>();
         Map<String, Object> smf = new LinkedHashMap<>();
         smf.put("address", "smf1-nsmf");
@@ -237,7 +233,7 @@ public class MmeYamlRenderer {
 
     private Map<String, Object> buildSecuritySection(AmfConfig amf) {
         Map<String, Object> security = new LinkedHashMap<>();
-        // LLD Tablo 6: EIA/EEA algoritma sırası
+        // LLD table 6: EIA/EEA algorithm order
         security.put("integrity_order", amf.getSecurityParameters().getIntegrityOrder4g());
         security.put("ciphering_order", amf.getSecurityParameters().getCipheringOrder4g());
         return security;

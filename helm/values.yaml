@@ -21,6 +21,9 @@ resources:
     cpu: 1000m
     memory: 1Gi
 
+backup:
+  storageSize: 5Gi
+
 env:
   MONGO_HOST: mongodb
   MONGO_PORT: "27017"
@@ -28,9 +31,11 @@ env:
   SPRING_PROFILES_ACTIVE: prod
   K8S_DEPLOY_ENABLED: "true"
   FIREWALL_APPLY_ENABLED: "false"
+  BACKUP_STORAGE_PATH: /data/backups
 
 secrets:
   MONGO_USERNAME: admin
-  MONGO_PASSWORD: changeme
-  ENCRYPTION_SECRET: changeme-32chars-minimum-key-here
-  JWT_SECRET: changeme-jwt-secret-hex-string-here
+  MONGO_PASSWORD: ""      # REQUIRED: MongoDB password
+  ENCRYPTION_SECRET: ""   # REQUIRED: min 32 chars, NEVER change after first deployment
+  JWT_SECRET: ""          # REQUIRED: hex string, min 64 chars, MUST differ from ENCRYPTION_SECRET
+  APP_MASTER_TOKEN: ""    # REQUIRED: inter-node communication token

@@ -1,6 +1,10 @@
 package com.opticoms.optinmscore.config;
 
+import com.opticoms.optinmscore.config.security.MasterTokenFilter;
+import com.opticoms.optinmscore.config.security.MasterTokenFilterConfig;
 import com.opticoms.optinmscore.domain.subscriber.controller.SubscriberController;
+import com.opticoms.optinmscore.domain.subscriber.mapper.SubscriberMapper;
+import com.opticoms.optinmscore.domain.subscriber.service.BulkImportService;
 import com.opticoms.optinmscore.domain.subscriber.service.SubscriberService;
 import com.opticoms.optinmscore.domain.system.model.User;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
@@ -28,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Tenant identity is derived from JWT (via extractTenantId), not from X-Tenant-ID header.
  */
 @WebMvcTest(SubscriberController.class)
-@Import({SecurityConfiguration.class, JwtAuthenticationFilter.class, RateLimitTestConfig.class})
+@Import({SecurityConfiguration.class, JwtAuthenticationFilter.class, RateLimitTestConfig.class, MasterTokenFilterConfig.class})
 class SecurityIntegrationTest {
 
     private static final String TENANT = "OPTC-0001/0001/01";
@@ -36,6 +40,8 @@ class SecurityIntegrationTest {
     @Autowired private MockMvc mockMvc;
 
     @MockBean private SubscriberService subscriberService;
+    @MockBean private BulkImportService bulkImportService;
+    @MockBean private SubscriberMapper subscriberMapper;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
 
@@ -57,7 +63,7 @@ class SecurityIntegrationTest {
 
         @Test
         void noAuthHeader_GET_returnsForbidden() throws Exception {
-            mockMvc.perform(get("/api/v1/subscriber/list"))
+            mockMvc.perform(get("/api/v1/subscribers/list"))
                     .andExpect(status().isForbidden());
         }
 
@@ -65,14 +71,14 @@ class SecurityIntegrationTest {
         void invalidBearerToken_returnsForbidden() throws Exception {
             when(jwtService.extractUsername("bad-token")).thenThrow(new RuntimeException("Invalid"));
 
-            mockMvc.perform(get("/api/v1/subscriber/list")
+            mockMvc.perform(get("/api/v1/subscribers/list")
                             .header("Authorization", "Bearer bad-token"))
                     .andExpect(status().isForbidden());
         }
 
         @Test
         void noAuthHeader_POST_returnsForbidden() throws Exception {
-            mockMvc.perform(post("/api/v1/subscriber")
+            mockMvc.perform(post("/api/v1/subscribers")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))
                     .andExpect(status().isForbidden());
@@ -80,13 +86,13 @@ class SecurityIntegrationTest {
 
         @Test
         void noAuthHeader_DELETE_returnsForbidden() throws Exception {
-            mockMvc.perform(delete("/api/v1/subscriber/286010000000001"))
+            mockMvc.perform(delete("/api/v1/subscribers/286010000000001"))
                     .andExpect(status().isForbidden());
         }
 
         @Test
         void authenticatedEndpoint_noToken_cannotAccessService() throws Exception {
-            mockMvc.perform(get("/api/v1/subscriber/count"))
+            mockMvc.perform(get("/api/v1/subscribers/count"))
                     .andExpect(status().isForbidden());
 
             verifyNoInteractions(subscriberService);
@@ -102,7 +108,7 @@ class SecurityIntegrationTest {
         void viewerCannotPostSubscriber_returns403() throws Exception {
             stubAuthentication("viewer-token", viewerUser);
 
-            mockMvc.perform(post("/api/v1/subscriber")
+            mockMvc.perform(post("/api/v1/subscribers")
                             .header("Authorization", "Bearer viewer-token")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))
@@ -113,7 +119,7 @@ class SecurityIntegrationTest {
         void viewerCannotDeleteSubscriber_returns403() throws Exception {
             stubAuthentication("viewer-token", viewerUser);
 
-            mockMvc.perform(delete("/api/v1/subscriber/286010000000001")
+            mockMvc.perform(delete("/api/v1/subscribers/286010000000001")
                             .header("Authorization", "Bearer viewer-token"))
                     .andExpect(status().isForbidden());
         }
@@ -122,7 +128,7 @@ class SecurityIntegrationTest {
         void operatorCannotPostSubscriber_returns403() throws Exception {
             stubAuthentication("operator-token", operatorUser);
 
-            mockMvc.perform(post("/api/v1/subscriber")
+            mockMvc.perform(post("/api/v1/subscribers")
                             .header("Authorization", "Bearer operator-token")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))
@@ -134,7 +140,7 @@ class SecurityIntegrationTest {
             stubAuthentication("viewer-token", viewerUser);
             when(subscriberService.getSubscriberCount(TENANT)).thenReturn(10L);
 
-            mockMvc.perform(get("/api/v1/subscriber/count")
+            mockMvc.perform(get("/api/v1/subscribers/count")
                             .header("Authorization", "Bearer viewer-token"))
                     .andExpect(status().isOk())
                     .andExpect(content().string("10"));
@@ -144,7 +150,7 @@ class SecurityIntegrationTest {
         void adminCanDeleteSubscriber_passes() throws Exception {
             stubAuthentication("admin-token", adminUser);
 
-            mockMvc.perform(delete("/api/v1/subscriber/286010000000001")
+            mockMvc.perform(delete("/api/v1/subscribers/286010000000001")
                             .header("Authorization", "Bearer admin-token"))
                     .andExpect(status().isNoContent());
         }
@@ -154,7 +160,7 @@ class SecurityIntegrationTest {
             stubAuthentication("operator-token", operatorUser);
             when(subscriberService.getSubscriberCount(TENANT)).thenReturn(5L);
 
-            mockMvc.perform(get("/api/v1/subscriber/count")
+            mockMvc.perform(get("/api/v1/subscribers/count")
                             .header("Authorization", "Bearer operator-token"))
                     .andExpect(status().isOk())
                     .andExpect(content().string("5"));
@@ -171,7 +177,7 @@ class SecurityIntegrationTest {
             stubAuthentication("admin-token", adminUser);
             when(subscriberService.getSubscriberCount(TENANT)).thenReturn(42L);
 
-            mockMvc.perform(get("/api/v1/subscriber/count")
+            mockMvc.perform(get("/api/v1/subscribers/count")
                             .header("Authorization", "Bearer admin-token"))
                     .andExpect(status().isOk())
                     .andExpect(content().string("42"));
@@ -179,7 +185,7 @@ class SecurityIntegrationTest {
 
         @Test
         void noToken_returnsForbidden() throws Exception {
-            mockMvc.perform(get("/api/v1/subscriber/count"))
+            mockMvc.perform(get("/api/v1/subscribers/count"))
                     .andExpect(status().isForbidden());
         }
 
@@ -187,7 +193,7 @@ class SecurityIntegrationTest {
         void validToken_wrongRole_rejected403() throws Exception {
             stubAuthentication("viewer-token", viewerUser);
 
-            mockMvc.perform(post("/api/v1/subscriber")
+            mockMvc.perform(post("/api/v1/subscribers")
                             .header("Authorization", "Bearer viewer-token")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))

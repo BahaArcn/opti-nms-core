@@ -13,16 +13,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * GlobalConfig → ausf/udm/udr/bsf/pcf/scp YAML string'leri üretir.
+ * Renders {@link GlobalConfig} into YAML for common NFs: ausf, udm, udr, bsf, pcf, scp.
  *
- * LLD Parametre → YAML Path:
- *   GlobalConfig.maxSupportedDevices → global.max.ue  (tüm NF'ler)
+ * LLD parameter → YAML path:
+ *   {@code GlobalConfig.maxSupportedDevices} → {@code global.max.ue} (all of these NFs)
  *
- * UDM hnet bölümü: Eğer SuciProfileRepository mevcutsa ve tenant'a ait
- * ACTIVE profiller varsa, hnet bölümü DB'den dinamik üretilir.
- * Profil yoksa hardcoded fallback (6 key) kullanılır.
- *
- * Desteklenen NF'ler: ausf, udm, udr, bsf, pcf, scp
+ * UDM {@code hnet}: when {@link SuciProfileRepository} is available and the tenant has ACTIVE profiles,
+ * {@code hnet} is built from the database; otherwise a hardcoded six-key fallback is used.
  */
 @Component
 public class CommonNfYamlRenderer {
@@ -44,11 +41,9 @@ public class CommonNfYamlRenderer {
     }
 
     /**
-     * Tüm common NF'ler için YAML üretir.
+     * Renders YAML for every common NF.
      *
-     * @param global GlobalConfig — max.ue için
-     * @return Map: NF adı → YAML string
-     *         Örnek: {"ausf" → "logger:...", "udm" → "logger:...", ...}
+     * @return map from NF name to YAML text (e.g. {@code ausf} → {@code logger:...})
      */
     public Map<String, String> renderAll(GlobalConfig global, String tenantId) {
         Map<String, String> result = new LinkedHashMap<>();
@@ -61,17 +56,14 @@ public class CommonNfYamlRenderer {
         return result;
     }
 
-    /** Backward-compatible overload — uses hardcoded hnet defaults. */
+    /** Backward-compatible overload without tenant (hardcoded {@code hnet}). */
     public Map<String, String> renderAll(GlobalConfig global) {
         return renderAll(global, null);
     }
 
     /**
-     * AUSF — Authentication Server Function
-     * 5G UE kimlik doğrulama — UDM ile konuşur.
-     *
-     * BUG-03 düzeltmesi: Referans ausf-configmap.yaml'da SBI server
-     * "dev: eth0" değil "address: 0.0.0.0" kullanıyor.
+     * AUSF — Authentication Server Function (5G UE authentication; talks to UDM).
+     * BUG-03: reference ausf-configmap uses SBI {@code address: 0.0.0.0}, not {@code dev: eth0}.
      */
     public String renderAusf(GlobalConfig global) {
         Map<String, Object> root = new LinkedHashMap<>();
@@ -88,14 +80,9 @@ public class CommonNfYamlRenderer {
     }
 
     /**
-     * UDM — Unified Data Management
-     * Subscriber verilerini yönetir — UDR'den veri çeker.
-     *
-     * BUG-02 düzeltmesi: hnet bölümü eklendi.
-     * SUCI (Subscription Concealed Identifier) şifre çözme için
-     * UDM'nin HNET private key dosyalarına erişmesi gerekir.
-     * Key dosyaları K8s volume'da sabit yollarda mount edilir.
-     * Referans: udm-configmap.yaml — 6 key (curve25519 + secp256r1 çiftleri)
+     * UDM — Unified Data Management (subscriber data; reads from UDR).
+     * BUG-02: {@code hnet} section added for SUCI decryption — HNET private keys on fixed K8s mount paths.
+     * Reference udm-configmap: six keys (curve25519 + secp256r1 pairs).
      */
     public String renderUdm(GlobalConfig global, String tenantId) {
         Map<String, Object> root = new LinkedHashMap<>();
@@ -112,19 +99,14 @@ public class CommonNfYamlRenderer {
         return yaml.dump(root);
     }
 
-    /** Backward-compatible overload — uses hardcoded hnet defaults. */
+    /** Backward-compatible overload without tenant (hardcoded {@code hnet}). */
     public String renderUdm(GlobalConfig global) {
         return renderUdm(global, null);
     }
 
     /**
-     * UDR — Unified Data Repository
-     * Subscriber datasının gerçek deposu — MongoDB ile konuşur.
-     *
-     * BUG-01 düzeltmesi: db_uri eklendi.
-     * UDR, subscriber verilerini MongoDB'den okur/yazar.
-     * db_uri olmadan UDR start-up sırasında MongoDB'e bağlanamaz.
-     * Referans: udr-configmap.yaml — db_uri ilk alan olarak tanımlı.
+     * UDR — Unified Data Repository (subscriber persistence via MongoDB).
+     * BUG-01: {@code db_uri} required at startup (first field in reference udr-configmap).
      */
     public String renderUdr(GlobalConfig global) {
         Map<String, Object> root = new LinkedHashMap<>();
@@ -141,10 +123,7 @@ public class CommonNfYamlRenderer {
         return yaml.dump(root);
     }
 
-    /**
-     * BSF — Binding Support Function
-     * UE'nin hangi PCF'e bağlı olduğunu takip eder.
-     */
+    /** BSF — Binding Support Function (tracks UE–PCF binding). */
     public String renderBsf(GlobalConfig global) {
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("logger", buildLogger("bsf"));
@@ -160,13 +139,7 @@ public class CommonNfYamlRenderer {
     }
 
     /**
-     * PCF — Policy Control Function
-     * UE policy kararlarını yönetir — MongoDB'den policy verisi okur.
-     *
-     * Özellikleri:
-     * - db_uri: MongoDB bağlantısı (K8s servis DNS ile)
-     * - metrics.server: 0.0.0.0:9090 (Prometheus scrape endpoint'i)
-     * - SCP üzerinden diğer NF'lere erişir
+     * PCF — Policy Control Function (policy from MongoDB, metrics on {@code 0.0.0.0:9090}, SCP client).
      */
     public String renderPcf(GlobalConfig global) {
         Map<String, Object> root = new LinkedHashMap<>();
@@ -177,7 +150,6 @@ public class CommonNfYamlRenderer {
         Map<String, Object> pcf = new LinkedHashMap<>();
         pcf.put("sbi", buildSbi("pcf-npcf", List.of(buildScpClient())));
 
-        // Metrics: Prometheus scrape endpoint'i
         Map<String, Object> metricsServer = new LinkedHashMap<>();
         metricsServer.put("address", "0.0.0.0");
         metricsServer.put("port", 9090);
@@ -190,12 +162,7 @@ public class CommonNfYamlRenderer {
     }
 
     /**
-     * SCP — Service Communication Proxy
-     * NF'ler arası SBI trafiğini proxy'ler — NRF ile iletişim kurar.
-     *
-     * Özellikleri:
-     * - no_sepp: true (SEPP olmadan çalışır, single-PLMN deployment için)
-     * - NRF client: SCP'nin kendisi NRF'e kayıt olur
+     * SCP — Service Communication Proxy (proxies SBI; NRF client for single-PLMN, no SEPP).
      */
     public String renderScp(GlobalConfig global) {
         Map<String, Object> root = new LinkedHashMap<>();
@@ -204,7 +171,6 @@ public class CommonNfYamlRenderer {
 
         Map<String, Object> scp = new LinkedHashMap<>();
 
-        // SBI: server + NRF client (SCP, SCP client kullanmaz — kendisi proxy)
         Map<String, Object> sbi = new LinkedHashMap<>();
 
         List<Map<String, Object>> servers = new ArrayList<>();
@@ -215,7 +181,6 @@ public class CommonNfYamlRenderer {
         servers.add(server);
         sbi.put("server", servers);
 
-        // SCP, NRF'e doğrudan bağlanır (SCP client değil, NRF client)
         Map<String, Object> nrfEntry = new LinkedHashMap<>();
         nrfEntry.put("uri", "http://nrf-nnrf:80");
         Map<String, Object> client = new LinkedHashMap<>();
@@ -228,10 +193,8 @@ public class CommonNfYamlRenderer {
         return yaml.dump(root);
     }
 
-    // ── Private builder metodları ────────────────────────────────────────────
-
     /**
-     * global.max bölümü — LLD Tablo 3
+     * {@code global.max} — LLD table 3
      * GlobalConfig.maxSupportedDevices → global.max.ue
      * GlobalConfig.maxSupportedGNBs   → global.max.gnb
      */
@@ -251,10 +214,10 @@ public class CommonNfYamlRenderer {
     }
 
     /**
-     * SBI section — dev:eth0 ile (UDM, UDR, BSF, PCF, SCP için)
+     * SBI with {@code dev: eth0} (UDM, UDR, BSF, PCF, SCP).
      *
-     * @param advertise K8s service DNS adı (örn. "udm-nudm")
-     * @param clients   sbi.client altına eklenecek clientlar
+     * @param advertise K8s service DNS name (e.g. {@code udm-nudm})
+     * @param clients   entries under {@code sbi.client}
      */
     private Map<String, Object> buildSbi(String advertise, List<Map<String, Object>> clients) {
         Map<String, Object> sbi = new LinkedHashMap<>();
@@ -277,12 +240,7 @@ public class CommonNfYamlRenderer {
     }
 
     /**
-     * SBI section — address ile (AUSF için)
-     * Referans ausf-configmap.yaml'da "dev: eth0" yerine "address: 0.0.0.0" kullanılıyor.
-     *
-     * @param address   SBI server bind adresi (örn. "0.0.0.0")
-     * @param advertise K8s service DNS adı (örn. "ausf-nausf")
-     * @param clients   sbi.client altına eklenecek clientlar
+     * SBI with {@code address} (AUSF); reference config uses {@code address: 0.0.0.0} instead of {@code dev: eth0}.
      */
     private Map<String, Object> buildSbiWithAddress(String address, String advertise,
                                                      List<Map<String, Object>> clients) {
@@ -306,14 +264,9 @@ public class CommonNfYamlRenderer {
     }
 
     /**
-     * UDM hnet bölümü — SUCI şifre çözme için HNET private key dosyaları.
-     *
-     * Scheme 1 = Profile-A (curve25519), Scheme 2 = Profile-B (secp256r1)
-     * Key dosyaları K8s volume'da mount edilen sabit yollarda tutulur.
-     *
-     * Eğer {@link SuciProfileRepository} inject edilmişse ve tenant'a ait ACTIVE
-     * profiller varsa, hnet bölümü MongoDB'deki profillerden dinamik üretilir.
-     * Yoksa hardcoded 6-key fallback kullanılır.
+     * UDM {@code hnet}: HNET private key paths for SUCI decryption.
+     * Scheme 1 = Profile-A (curve25519), 2 = Profile-B (secp256r1), keys on fixed K8s mount paths.
+     * With {@link SuciProfileRepository} and ACTIVE tenant profiles, built from MongoDB; else six-key fallback.
      */
     private List<Map<String, Object>> buildHnetSection(String tenantId) {
         if (suciProfileRepository != null && tenantId != null) {

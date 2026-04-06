@@ -1,11 +1,14 @@
 package com.opticoms.optinmscore.domain.multitenant.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opticoms.optinmscore.domain.multitenant.dto.SlaveNodeResponse;
+import com.opticoms.optinmscore.domain.multitenant.mapper.SlaveNodeMapper;
 import com.opticoms.optinmscore.domain.multitenant.model.SlaveNode;
 import com.opticoms.optinmscore.domain.multitenant.model.SlaveNode.SlaveStatus;
 import com.opticoms.optinmscore.domain.multitenant.service.MasterService;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
 import com.opticoms.optinmscore.security.JwtService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,8 +40,24 @@ class MasterControllerTest {
     @MockBean private MasterService masterService;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
+    @MockBean private SlaveNodeMapper slaveNodeMapper;
 
     private static final String TENANT = "OPTC-0001/0001/01";
+
+    @BeforeEach
+    void setUp() {
+        when(slaveNodeMapper.toResponse(any(SlaveNode.class))).thenAnswer(inv -> {
+            SlaveNode e = inv.getArgument(0);
+            SlaveNodeResponse r = new SlaveNodeResponse();
+            r.setId(e.getId());
+            r.setSlaveAddress(e.getSlaveAddress());
+            r.setSlaveTenantId(e.getSlaveTenantId());
+            r.setStatus(e.getStatus());
+            r.setLastHeartbeat(e.getLastHeartbeat());
+            r.setRegisteredAt(e.getRegisteredAt());
+            return r;
+        });
+    }
 
     private SlaveNode buildNode() {
         SlaveNode node = new SlaveNode();

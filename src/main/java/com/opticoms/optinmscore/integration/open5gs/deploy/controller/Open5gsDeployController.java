@@ -17,35 +17,24 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Open5GS Kubernetes deploy endpoint'leri.
+ * Open5GS Kubernetes deploy API.
  *
- * Güvenlik: Tüm endpoint'ler sadece ROLE_ADMIN erişimine açık.
- * @PreAuthorize, SecurityConfiguration'daki @EnableMethodSecurity ile aktif.
+ * All routes require {@code ROLE_ADMIN} ({@code @PreAuthorize} with method security enabled).
  *
- * Akış:
- *   HTTP POST → Controller → ConfigRenderService (DB→YAML) → KubernetesDeployService (K8s apply)
- *
- * Tenant identity is derived from the JWT token for each request.
+ * Flow: HTTP POST → {@link ConfigRenderService} (DB → YAML) → {@link KubernetesDeployService} (apply to cluster).
+ * Tenant identity comes from the JWT per request.
  */
 @RestController
 @RequestMapping("/api/v1/open5gs/deploy")
 @RequiredArgsConstructor
-@Tag(name = "Open5GS Deploy", description = "Open5GS Kubernetes ConfigMap deploy ve rollout restart işlemleri")
+@Tag(name = "Open5GS Deploy", description = "Open5GS ConfigMap updates and deployment rollouts on Kubernetes")
 public class Open5gsDeployController {
 
     private final ConfigRenderService renderService;
     private final KubernetesDeployService deployService;
 
-    /**
-     * Tüm NF'leri (AMF + SMF + UPF + NRF + NSSF) deploy eder.
-     *
-     * İş akışı:
-     * 1. DB'den GlobalConfig + AmfConfig + SmfConfig + UpfConfig çek.
-     * 2. Tüm NF YAML'larını üret.
-     * 3. open5gs namespace'indeki ConfigMap'leri güncelle.
-     * 4. Tüm Deployment'lara rollout restart uygula.
-     */
-    @Operation(summary = "Deploy all NFs", description = "Tüm Open5GS NF'lerini DB'deki güncel config ile deploy eder")
+    /** Deploys all NFs (AMF, SMF, UPF, NRF, NSSF, common NFs, and 4G NFs when applicable). */
+    @Operation(summary = "Deploy all NFs", description = "Deploy all Open5GS network functions using current config from the database")
     @PostMapping("/all")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<DeployResult> deployAll(
@@ -56,10 +45,7 @@ public class Open5gsDeployController {
         return ResponseEntity.ok(result);
     }
 
-    /**
-     * Sadece AMF'i deploy eder.
-     * AMF config değişince AMF'i restart etmek yeterli — diğer NF'lere dokunmaz.
-     */
+    /** Deploys AMF only (restart AMF when AMF config changes). */
     @Operation(summary = "Deploy AMF only")
     @PostMapping("/amf")
     @PreAuthorize("hasRole('ADMIN')")
@@ -71,9 +57,7 @@ public class Open5gsDeployController {
         return ResponseEntity.ok(result);
     }
 
-    /**
-     * Sadece SMF'i deploy eder.
-     */
+    /** Deploys SMF only. */
     @Operation(summary = "Deploy SMF only")
     @PostMapping("/smf")
     @PreAuthorize("hasRole('ADMIN')")
@@ -86,8 +70,7 @@ public class Open5gsDeployController {
     }
 
     /**
-     * Sadece UPF'i deploy eder.
-     * UPF deploy'u SmfConfig'e de bağımlı (subnet/dnn için) — renderUpfOnly ikisinide çeker.
+     * Deploys UPF only. Rendering also loads SmfConfig (subnets/DNNs); {@link ConfigRenderService#renderUpfOnly} pulls both.
      */
     @Operation(summary = "Deploy UPF only")
     @PostMapping("/upf")
@@ -101,15 +84,11 @@ public class Open5gsDeployController {
     }
 
     /**
-     * Dry-run: Tüm NF YAML'larını üretir ama K8s'e uygulamaz.
-     *
-     * Kullanım amacı: Deploy öncesi config'in doğruluğunu kontrol etmek.
-     * Frontend bu endpoint'i çağırarak üretilecek YAML'ları kullanıcıya gösterebilir.
-     *
-     * Response: { "amfcfg.yaml": "...", "smfcfg.yaml": "...", "upfcfg.yaml": "...", ... }
+     * Dry-run: renders all NF YAML strings without applying to Kubernetes.
+     * Response shape: {@code { "amfcfg.yaml": "...", "smfcfg.yaml": "...", ... }}
      */
     @Operation(summary = "Preview all rendered YAMLs (dry-run)",
-               description = "YAML'ları üretir ama K8s'e uygulamaz. Config doğrulama için kullanın.")
+               description = "Render YAML only; does not apply to Kubernetes. Use to validate config before deploy.")
     @GetMapping("/preview")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, String>> preview(
@@ -117,7 +96,6 @@ public class Open5gsDeployController {
         String tenantId = TenantContext.getCurrentTenantId(request);
         RenderedConfigs rendered = renderService.renderAll(tenantId);
 
-        // Frontend'in okuyabileceği düz map: dosya adı → YAML içeriği
         Map<String, String> preview = new LinkedHashMap<>();
         preview.put("amfcfg.yaml",   rendered.getAmfYaml());
         preview.put("smfcfg.yaml",   rendered.getSmfYaml());
@@ -132,7 +110,6 @@ public class Open5gsDeployController {
                     (nf, yamlContent) -> preview.put(nf + "cfg.yaml", yamlContent));
         }
 
-        // 4G / HYBRID mod: MME YAML
         if (rendered.getMmeYaml() != null) {
             preview.put("mmecfg.yaml", rendered.getMmeYaml());
         }

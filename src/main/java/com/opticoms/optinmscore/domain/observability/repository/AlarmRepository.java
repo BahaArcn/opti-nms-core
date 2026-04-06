@@ -26,6 +26,17 @@ public interface AlarmRepository extends MongoRepository<Alarm, String> {
 
     List<Alarm> findByTenantIdOrderByEventTimeDesc(String tenantId);
 
+    Page<Alarm> findByTenantIdAndSeverityAndStatusOrderByEventTimeDesc(
+            String tenantId, Alarm.Severity severity, Alarm.AlarmStatus status, Pageable pageable);
+
+    Page<Alarm> findByTenantIdAndSeverityOrderByEventTimeDesc(
+            String tenantId, Alarm.Severity severity, Pageable pageable);
+
+    Page<Alarm> findByTenantIdAndStatusOrderByEventTimeDesc(
+            String tenantId, Alarm.AlarmStatus status, Pageable pageable);
+
+    Page<Alarm> findByTenantIdOrderByEventTimeDesc(String tenantId, Pageable pageable);
+
     Optional<Alarm> findByIdAndTenantId(String id, String tenantId);
 
     Page<Alarm> findByTenantId(String tenantId, Pageable pageable);

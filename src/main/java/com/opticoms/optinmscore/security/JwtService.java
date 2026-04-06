@@ -30,6 +30,9 @@ public class JwtService {
     @Value("${app.security.jwt.expiration-ms:86400000}")
     private long jwtExpiration;
 
+    @Value("${app.security.master-key}")
+    private String masterKeyString;
+
     private SecretKey secretKey;
 
     @PostConstruct
@@ -37,6 +40,11 @@ public class JwtService {
         if (secretKeyString == null || secretKeyString.isBlank() || secretKeyString.length() < 32) {
             throw new IllegalStateException(
                     "app.security.jwt.secret must be set and at least 32 characters long");
+        }
+        if (secretKeyString.equals(masterKeyString)) {
+            throw new IllegalStateException(
+                    "JWT_SECRET and ENCRYPTION_SECRET must be different values. " +
+                    "Using the same secret for both is a security risk.");
         }
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

@@ -2,6 +2,9 @@ package com.opticoms.optinmscore.domain.firewall.controller;
 
 import com.opticoms.optinmscore.config.RateLimitTestConfig;
 import com.opticoms.optinmscore.config.SecurityConfiguration;
+import com.opticoms.optinmscore.config.security.MasterTokenFilter;
+import com.opticoms.optinmscore.config.security.MasterTokenFilterConfig;
+import com.opticoms.optinmscore.domain.firewall.mapper.FirewallRuleMapper;
 import com.opticoms.optinmscore.domain.firewall.service.FirewallService;
 import com.opticoms.optinmscore.domain.system.model.User;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
@@ -21,7 +24,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(FirewallController.class)
-@Import({SecurityConfiguration.class, JwtAuthenticationFilter.class, RateLimitTestConfig.class})
+@Import({SecurityConfiguration.class, JwtAuthenticationFilter.class, RateLimitTestConfig.class, MasterTokenFilterConfig.class})
 class FirewallSecurityTest {
 
     private static final String TENANT = "OPTC-0001/0001/01";
@@ -29,6 +32,7 @@ class FirewallSecurityTest {
     @Autowired private MockMvc mockMvc;
 
     @MockBean private FirewallService firewallService;
+    @MockBean private FirewallRuleMapper firewallRuleMapper;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
 

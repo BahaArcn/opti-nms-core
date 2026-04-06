@@ -6,22 +6,21 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Fabric8 KubernetesClient'ı Spring Bean olarak kaydeder.
+ * Registers the Fabric8 {@link KubernetesClient} as a Spring bean.
  *
- * Otomatik konfigürasyon öncelik sırası:
- * 1. In-cluster (pod içinde çalışıyorsa): /var/run/secrets/kubernetes.io/serviceaccount/
- *    → ServiceAccount token + CA cert otomatik okunur.
- * 2. Local geliştirme: ~/.kube/config dosyası kullanılır.
- * 3. KUBECONFIG env var ile override edilebilir.
+ * Resolution order:
+ * 1. In-cluster: reads ServiceAccount token and CA from
+ *    {@code /var/run/secrets/kubernetes.io/serviceaccount/}
+ * 2. Local: {@code ~/.kube/config}
+ * 3. Override with the {@code KUBECONFIG} environment variable
  *
- * KubernetesDeployService bu bean'i inject eder.
+ * Injected by {@code KubernetesDeployService}.
  */
 @Configuration
 public class KubernetesClientConfig {
 
     @Bean
     public KubernetesClient kubernetesClient() {
-        // KubernetesClientBuilder: ortamı otomatik algılar (in-cluster vs local)
         return new KubernetesClientBuilder().build();
     }
 }

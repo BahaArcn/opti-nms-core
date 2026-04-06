@@ -2,9 +2,14 @@ package com.opticoms.optinmscore.domain.subscriber.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.opticoms.optinmscore.domain.subscriber.model.Subscriber;
+import com.opticoms.optinmscore.domain.subscriber.dto.SubscriberRequest;
+import com.opticoms.optinmscore.domain.subscriber.dto.SubscriberResponse;
+import com.opticoms.optinmscore.domain.subscriber.mapper.SubscriberMapper;
+import com.opticoms.optinmscore.domain.subscriber.service.BulkImportService;
 import com.opticoms.optinmscore.domain.subscriber.service.SubscriberService;
 import com.opticoms.optinmscore.security.JwtService;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -33,8 +38,32 @@ class SubscriberControllerTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockBean private SubscriberService subscriberService;
+    @MockBean private BulkImportService bulkImportService;
     @MockBean private JwtService jwtService;
     @MockBean private CustomUserDetailsService customUserDetailsService;
+    @MockBean private SubscriberMapper subscriberMapper;
+
+    @BeforeEach
+    void setUp() {
+        when(subscriberMapper.toResponse(any(Subscriber.class))).thenAnswer(inv -> {
+            Subscriber e = inv.getArgument(0);
+            SubscriberResponse r = new SubscriberResponse();
+            r.setImsi(e.getImsi());
+            return r;
+        });
+        when(subscriberMapper.toEntity(any(SubscriberRequest.class))).thenAnswer(inv -> {
+            SubscriberRequest req = inv.getArgument(0);
+            Subscriber s = new Subscriber();
+            s.setImsi(req.getImsi());
+            s.setKi(req.getKi());
+            s.setUsimType(req.getUsimType());
+            s.setOpc(req.getOpc());
+            s.setUeAmbrDl(req.getUeAmbrDl());
+            s.setUeAmbrUl(req.getUeAmbrUl());
+            s.setProfileList(req.getProfileList());
+            return s;
+        });
+    }
 
     @Test
     @WithMockUser(roles = "ADMIN")
@@ -42,7 +71,7 @@ class SubscriberControllerTest {
         Subscriber sub = buildSubscriber();
         when(subscriberService.createSubscriber(eq(TENANT), any())).thenReturn(sub);
 
-        mockMvc.perform(post("/api/v1/subscriber")
+        mockMvc.perform(post("/api/v1/subscribers")
                         .requestAttr("tenantId", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(sub)))
@@ -56,16 +85,21 @@ class SubscriberControllerTest {
         Subscriber sub = buildSubscriber();
         when(subscriberService.getSubscriber(TENANT, "286010000000001")).thenReturn(sub);
 
-        mockMvc.perform(get("/api/v1/subscriber/286010000000001")
+        mockMvc.perform(get("/api/v1/subscribers/286010000000001")
                         .requestAttr("tenantId", TENANT))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.imsi").value("286010000000001"));
+                .andExpect(jsonPath("$.imsi").value("286010000000001"))
+                .andExpect(jsonPath("$.ki").doesNotExist())
+                .andExpect(jsonPath("$.opc").doesNotExist())
+                .andExpect(jsonPath("$.op").doesNotExist())
+                .andExpect(jsonPath("$.imsiHash").doesNotExist())
+                .andExpect(jsonPath("$.msisdnHash").doesNotExist());
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
     void deleteSubscriber_returns204() throws Exception {
-        mockMvc.perform(delete("/api/v1/subscriber/286010000000001")
+        mockMvc.perform(delete("/api/v1/subscribers/286010000000001")
                         .requestAttr("tenantId", TENANT))
                 .andExpect(status().isNoContent());
 
@@ -78,7 +112,7 @@ class SubscriberControllerTest {
         when(subscriberService.getAllSubscribersPaged(eq(TENANT), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(buildSubscriber())));
 
-        mockMvc.perform(get("/api/v1/subscriber/list")
+        mockMvc.perform(get("/api/v1/subscribers/list")
                         .requestAttr("tenantId", TENANT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].imsi").value("286010000000001"));
@@ -89,7 +123,7 @@ class SubscriberControllerTest {
     void getSubscriberCount_returns200() throws Exception {
         when(subscriberService.getSubscriberCount(TENANT)).thenReturn(42L);
 
-        mockMvc.perform(get("/api/v1/subscriber/count")
+        mockMvc.perform(get("/api/v1/subscribers/count")
                         .requestAttr("tenantId", TENANT))
                 .andExpect(status().isOk())
                 .andExpect(content().string("42"));
@@ -102,7 +136,7 @@ class SubscriberControllerTest {
         when(subscriberService.updateSubscriber(eq(TENANT), eq("286010000000001"), any()))
                 .thenReturn(sub);
 
-        mockMvc.perform(put("/api/v1/subscriber/286010000000001")
+        mockMvc.perform(put("/api/v1/subscribers/286010000000001")
                         .requestAttr("tenantId", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(sub)))
@@ -115,7 +149,7 @@ class SubscriberControllerTest {
     void batchDelete_returns204() throws Exception {
         List<String> imsis = List.of("286010000000001", "286010000000002");
 
-        mockMvc.perform(delete("/api/v1/subscriber/batch")
+        mockMvc.perform(delete("/api/v1/subscribers/batch")
                         .requestAttr("tenantId", TENANT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(imsis)))
