@@ -133,6 +133,12 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/edge-locations/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/edge-locations/**").hasAnyRole("ADMIN", "OPERATOR", "VIEWER")
 
+                        // Network service management: ADMIN for write, all roles for read
+                        .requestMatchers(HttpMethod.POST, "/api/v1/networks/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/networks/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/networks/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/networks/**").hasAnyRole("ADMIN", "OPERATOR", "VIEWER")
+
                         // Policy management: ADMIN for write, OPERATOR+ for read
                         .requestMatchers(HttpMethod.POST, "/api/v1/policies/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/policies/**").hasRole("ADMIN")

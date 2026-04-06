@@ -8,6 +8,8 @@ import com.opticoms.optinmscore.domain.inventory.model.PduSession;
 import com.opticoms.optinmscore.domain.inventory.repository.ConnectedUeRepository;
 import com.opticoms.optinmscore.domain.inventory.repository.GNodeBRepository;
 import com.opticoms.optinmscore.domain.inventory.repository.PduSessionRepository;
+import com.opticoms.optinmscore.domain.networkservice.repository.NetworkRepository;
+import com.opticoms.optinmscore.domain.networkservice.repository.ServiceInstanceRepository;
 import com.opticoms.optinmscore.domain.observability.model.Alarm;
 import com.opticoms.optinmscore.domain.observability.repository.AlarmRepository;
 import com.opticoms.optinmscore.domain.subscriber.repository.SubscriberRepository;
@@ -43,6 +45,8 @@ class DashboardServiceTest {
     @Mock private TenantService tenantService;
     @Mock private EdgeLocationRepository edgeLocationRepository;
     @Mock private LicenseService licenseService;
+    @Mock private NetworkRepository networkRepository;
+    @Mock private ServiceInstanceRepository serviceInstanceRepository;
 
     @InjectMocks
     private DashboardService service;
