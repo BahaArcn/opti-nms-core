@@ -43,6 +43,14 @@ public class TenantController {
         tenant.setSmfUrl(request.getSmfUrl());
         tenant.setOpen5gsMongoUri(request.getOpen5gsMongoUri());
         tenant.setUpfMetricsUrl(request.getUpfMetricsUrl());
+        tenant.setNrfUrl(request.getNrfUrl());
+        tenant.setNssfUrl(request.getNssfUrl());
+        tenant.setScpUrl(request.getScpUrl());
+        tenant.setAusfUrl(request.getAusfUrl());
+        tenant.setUdmUrl(request.getUdmUrl());
+        tenant.setUdrUrl(request.getUdrUrl());
+        tenant.setBsfUrl(request.getBsfUrl());
+        tenant.setPcfUrl(request.getPcfUrl());
         Tenant saved = tenantService.createTenant(tenant);
 
         User admin;

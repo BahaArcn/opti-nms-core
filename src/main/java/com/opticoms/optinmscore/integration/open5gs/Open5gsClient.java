@@ -6,6 +6,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.URI;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -81,6 +84,37 @@ public class Open5gsClient {
         try {
             restTemplate.getForEntity(smfUrl + "/pdu-info", Map.class);
             return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Generic health check for NFs that expose SBI (NRF, NSSF, SCP, AUSF, UDM, UDR, BSF, PCF).
+     * Open5GS SBI uses h2c (HTTP/2 cleartext) which RestTemplate cannot speak.
+     * We first try an HTTP GET (works for NFs with HTTP/1.1 endpoints like PCF metrics).
+     * If that fails, we fall back to a TCP socket check: if the port is accepting
+     * connections, the NF process is alive.
+     */
+    public boolean isNfHealthy(String nfUrl) {
+        if (nfUrl == null || nfUrl.isBlank()) return false;
+        try {
+            ResponseEntity<String> r = restTemplate.getForEntity(nfUrl, String.class);
+            return r.getStatusCode().is2xxSuccessful();
+        } catch (Exception httpEx) {
+            return tcpCheck(nfUrl);
+        }
+    }
+
+    private boolean tcpCheck(String url) {
+        try {
+            URI uri = URI.create(url);
+            String host = uri.getHost();
+            int port = uri.getPort() == -1 ? 80 : uri.getPort();
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(host, port), 3000);
+                return true;
+            }
         } catch (Exception e) {
             return false;
         }

@@ -2,6 +2,7 @@ package com.opticoms.optinmscore.domain.system.controller;
 
 import com.opticoms.optinmscore.domain.system.dto.AuthResponse;
 import com.opticoms.optinmscore.domain.system.dto.LoginRequest;
+import com.opticoms.optinmscore.domain.system.model.Permission;
 import com.opticoms.optinmscore.domain.system.model.User;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
 import com.opticoms.optinmscore.security.JwtService;
@@ -59,6 +60,7 @@ public class AuthController {
         response.setEmail(domainUser.getEmail());
         response.setRole(domainUser.getRole().name());
         response.setTenantId(domainUser.getTenantId());
+        response.setPermissions(Permission.forRole(domainUser.getRole()));
 
         return ResponseEntity.ok(response);
     }

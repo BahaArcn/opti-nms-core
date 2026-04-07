@@ -32,6 +32,15 @@ public class Tenant extends BaseEntity {
     @Schema(description = "UPF Prometheus metrics endpoint URL (optional)", example = "http://upf:9090/metrics")
     private String upfMetricsUrl;
 
+    private String nrfUrl;
+    private String nssfUrl;
+    private String scpUrl;
+    private String ausfUrl;
+    private String udmUrl;
+    private String udrUrl;
+    private String bsfUrl;
+    private String pcfUrl;
+
     @Indexed
     private boolean active = true;
 }

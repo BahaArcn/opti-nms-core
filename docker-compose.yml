@@ -37,6 +37,9 @@ services:
       FIREWALL_APPLY_ENABLED: "false"
       OPEN5GS_UPF_METRICS_URL: "http://host.docker.internal:9092"
       APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
+      SPRINGDOC_API_DOCS_ENABLED: ${SPRINGDOC_API_DOCS_ENABLED:-false}
+      SPRINGDOC_SWAGGER_UI_ENABLED: ${SPRINGDOC_SWAGGER_UI_ENABLED:-false}
     depends_on:
       mongodb:
         condition: service_healthy

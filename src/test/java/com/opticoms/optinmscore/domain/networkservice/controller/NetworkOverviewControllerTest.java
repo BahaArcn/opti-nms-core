@@ -54,7 +54,7 @@ class NetworkOverviewControllerTest {
         when(networkOverviewService.getOverview(TENANT)).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/networks/overview")
-                        .requestAttr("tenantId", TENANT))
+                        .header("X-Tenant-ID", TENANT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.services.length()").value(3))
                 .andExpect(jsonPath("$.services[0].name").value("Control Plane"))
@@ -75,7 +75,7 @@ class NetworkOverviewControllerTest {
         when(networkOverviewService.getOverview(TENANT)).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/networks/overview")
-                        .requestAttr("tenantId", TENANT))
+                        .header("X-Tenant-ID", TENANT))
                 .andExpect(status().isOk());
     }
 
