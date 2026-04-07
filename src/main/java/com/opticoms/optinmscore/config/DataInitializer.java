@@ -23,15 +23,7 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) {
         if (!userRepository.existsByUsername("admin")) {
-            String password;
-            if (defaultAdminPassword != null) {
-                password = defaultAdminPassword;
-            } else {
-                password = java.util.UUID.randomUUID().toString();
-                log.warn("DEFAULT_ADMIN_PASSWORD env var not set. "
-                       + "A random password was generated. "
-                       + "Use the reset-password API to set a known password.");
-            }
+            String password = resolvePassword();
 
             User admin = new User();
             admin.setUsername("admin");
@@ -43,8 +35,26 @@ public class DataInitializer implements CommandLineRunner {
             admin.setTenantId("PLAT-0000/0000/00");
 
             userRepository.save(admin);
-            log.info("Default admin user created. Change the password immediately via API.");
-
+            log.info("Default admin user created.");
+        } else if (defaultAdminPassword != null) {
+            userRepository.findByUsername("admin").ifPresent(admin -> {
+                if (!passwordEncoder.matches(defaultAdminPassword, admin.getPassword())) {
+                    admin.setPassword(passwordEncoder.encode(defaultAdminPassword));
+                    userRepository.save(admin);
+                    log.info("Admin password synchronized with DEFAULT_ADMIN_PASSWORD env var.");
+                }
+            });
         }
+    }
+
+    private String resolvePassword() {
+        if (defaultAdminPassword != null) {
+            return defaultAdminPassword;
+        }
+        String random = java.util.UUID.randomUUID().toString();
+        log.warn("DEFAULT_ADMIN_PASSWORD env var not set. "
+               + "A random password was generated. "
+               + "Use the reset-password API to set a known password.");
+        return random;
     }
 }
