@@ -55,7 +55,7 @@ public class AmfYamlRenderer {
         root.put("logger", logger);
 
         // ── global.max ──────────────────────────────────────────────────────
-        // LLD Tablo 3: Max-Nbr-UEs + Max-Nbr-NBs → YAML files: ALL
+        // LLD Table 3: Max-Nbr-UEs + Max-Nbr-NBs → YAML files: ALL
         Map<String, Object> globalSection = new LinkedHashMap<>();
         Map<String, Object> maxMap = new LinkedHashMap<>();
         maxMap.put("ue", global.getMaxSupportedDevices());
@@ -76,7 +76,7 @@ public class AmfYamlRenderer {
         amfSection.put("metrics", buildMetricsSection());
 
         // guami: AMF identity (PLMN + AMF-ID)
-        // LLD Tablo 5: Amf-Id (region/set/pointer) → amf.yaml
+        // LLD Table 5: Amf-Id (region/set/pointer) → amf.yaml
         amfSection.put("guami", buildGuamiList(global, amf));
 
         // tai: Global TAI list > AMF override
@@ -86,18 +86,18 @@ public class AmfYamlRenderer {
         amfSection.put("plmn_support", buildPlmnSupportList(global, amf));
 
         // security: 5G integrity and ciphering algorithm order
-        // LLD Tablo 5: Sec-Order-5g → amf.yaml
+        // LLD Table 5: Sec-Order-5g → amf.yaml
         amfSection.put("security", buildSecuritySection(amf));
 
         // network_name: display name on the UE (LLD table 3; Gap 4: from GlobalConfig)
         amfSection.put("network_name", buildNetworkNameSection(global));
 
         // amf_name: AMF name inside 5GC
-        // LLD Tablo 5: Amf-Name → amf.yaml
+        // LLD Table 5: Amf-Name → amf.yaml
         amfSection.put("amf_name", amf.getAmfName());
 
         // time: NAS timers
-        // LLD Tablo 5: Nas-Timers-5g (T3502, T3512) → amf.yaml
+        // LLD Table 5: Nas-Timers-5g (T3502, T3512) → amf.yaml
         amfSection.put("time", buildTimeSection(amf));
 
         root.put("amf", amfSection);
@@ -252,7 +252,7 @@ public class AmfYamlRenderer {
     }
 
     private Map<String, Object> buildTimeSection(AmfConfig amf) {
-        // LLD Tablo 5: T3502 ve T3512 → amf.time
+        // LLD Table 5: T3502 and T3512 → amf.time
         // t3502 → deregistration retransmission timer
         // t3512 → periodic registration timer
         Map<String, Object> time = new LinkedHashMap<>();

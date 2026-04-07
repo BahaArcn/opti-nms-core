@@ -6,7 +6,9 @@ import com.opticoms.optinmscore.config.ratelimit.RateLimitingFilter;
 import com.opticoms.optinmscore.config.security.MasterTokenFilter;
 import com.opticoms.optinmscore.security.JwtAuthenticationFilter;
 import com.opticoms.optinmscore.domain.system.service.CustomUserDetailsService;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -32,6 +34,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 
+@Slf4j
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -46,6 +49,14 @@ public class SecurityConfiguration {
 
     @Value("${app.cors.allowed-origins}")
     private String allowedOrigins;
+
+    @PostConstruct
+    void warnIfCorsWildcard() {
+        if (allowedOrigins.contains("*")) {
+            log.warn("CORS allowed-origins contains wildcard '*'. "
+                   + "This is acceptable for development but MUST be restricted in production.");
+        }
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -133,10 +144,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/edge-locations/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/edge-locations/**").hasAnyRole("ADMIN", "OPERATOR", "VIEWER")
 
-                        // Network service management: ADMIN for write, all roles for read
-                        .requestMatchers(HttpMethod.POST, "/api/v1/networks/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/networks/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/networks/**").hasRole("ADMIN")
+                        // Network overview: read-only, all roles
                         .requestMatchers(HttpMethod.GET, "/api/v1/networks/**").hasAnyRole("ADMIN", "OPERATOR", "VIEWER")
 
                         // Policy management: ADMIN for write, OPERATOR+ for read

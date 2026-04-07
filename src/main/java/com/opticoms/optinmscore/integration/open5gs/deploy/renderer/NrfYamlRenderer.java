@@ -47,7 +47,7 @@ public class NrfYamlRenderer {
         root.put("logger", logger);
 
         // ── global.max ──────────────────────────────────────────────────────
-        // LLD Tablo 3: Max-Nbr-UEs + Max-Nbr-NBs → YAML files: ALL
+        // LLD Table 3: Max-Nbr-UEs + Max-Nbr-NBs → YAML files: ALL
         Map<String, Object> globalSection = new LinkedHashMap<>();
         Map<String, Object> maxMap = new LinkedHashMap<>();
         maxMap.put("ue", global.getMaxSupportedDevices());

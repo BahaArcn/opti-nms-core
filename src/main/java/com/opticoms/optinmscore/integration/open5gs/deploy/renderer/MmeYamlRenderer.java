@@ -59,7 +59,7 @@ public class MmeYamlRenderer {
         root.put("logger", logger);
 
         // ── global.max ──────────────────────────────────────────────────────
-        // LLD Tablo 3: Max-Nbr-UEs + Max-Nbr-NBs → YAML files: ALL
+        // LLD Table 3: Max-Nbr-UEs + Max-Nbr-NBs → YAML files: ALL
         Map<String, Object> globalSection = new LinkedHashMap<>();
         Map<String, Object> maxMap = new LinkedHashMap<>();
         maxMap.put("ue", global.getMaxSupportedDevices());
@@ -74,7 +74,7 @@ public class MmeYamlRenderer {
         mmeSection.put("freeDiameter", "/open5gs/install/etc/freeDiameter/mme.conf");
 
         // s1ap: eNB ↔ MME control plane
-        // LLD Tablo 6: S1ap-Addr → mme.yaml
+        // LLD Table 6: S1ap-Addr → mme.yaml
         mmeSection.put("s1ap", buildS1apSection(amf.getS1cInterfaceIp()));
 
         // gtpc: 4G GTP-C toward SGWC and SMF (PGW-C)
@@ -90,19 +90,19 @@ public class MmeYamlRenderer {
         mmeSection.put("tai", buildTaiList(global, amf));
 
         // security: 4G integrity and ciphering (EIA/EEA)
-        // LLD Tablo 6: Sec-Order-4g → mme.yaml
+        // LLD Table 6: Sec-Order-4g → mme.yaml
         mmeSection.put("security", buildSecuritySection(amf));
 
         // network_name: display name on the 4G UE
-        // LLD Tablo 3: Network-Name → mme.yaml (4G)
+        // LLD Table 3: Network-Name → mme.yaml (4G)
         mmeSection.put("network_name", buildNetworkNameSection(global));
 
         // mme_name: MME name inside the 4G core
-        // LLD Tablo 6: Mme-Name → mme.yaml
+        // LLD Table 6: Mme-Name → mme.yaml
         mmeSection.put("mme_name", amf.getMmeName() != null ? amf.getMmeName() : "Opti4GC-mme0");
 
         // time: NAS timers (4G)
-        // LLD Tablo 6: Nas-Timers-4g (T3402, T3412, T3423) → mme.yaml
+        // LLD Table 6: Nas-Timers-4g (T3402, T3412, T3423) → mme.yaml
         mmeSection.put("time", buildTimeSection(amf));
 
         root.put("mme", mmeSection);
@@ -249,7 +249,7 @@ public class MmeYamlRenderer {
     }
 
     private Map<String, Object> buildTimeSection(AmfConfig amf) {
-        // LLD Tablo 6: T3402=720, T3412=3240, T3423=720 (default)
+        // LLD Table 6: T3402=720, T3412=3240, T3423=720 (default)
         Map<String, Object> time = new LinkedHashMap<>();
 
         Map<String, Object> t3402 = new LinkedHashMap<>();

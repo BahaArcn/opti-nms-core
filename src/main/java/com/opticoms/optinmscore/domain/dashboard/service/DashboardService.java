@@ -8,9 +8,6 @@ import com.opticoms.optinmscore.domain.inventory.model.PduSession;
 import com.opticoms.optinmscore.domain.inventory.repository.ConnectedUeRepository;
 import com.opticoms.optinmscore.domain.inventory.repository.GNodeBRepository;
 import com.opticoms.optinmscore.domain.inventory.repository.PduSessionRepository;
-import com.opticoms.optinmscore.domain.networkservice.model.ServiceStatus;
-import com.opticoms.optinmscore.domain.networkservice.repository.NetworkRepository;
-import com.opticoms.optinmscore.domain.networkservice.repository.ServiceInstanceRepository;
 import com.opticoms.optinmscore.domain.observability.model.Alarm;
 import com.opticoms.optinmscore.domain.observability.repository.AlarmRepository;
 import com.opticoms.optinmscore.domain.subscriber.repository.SubscriberRepository;
@@ -42,8 +39,6 @@ public class DashboardService {
     private final TenantService tenantService;
     private final EdgeLocationRepository edgeLocationRepository;
     private final LicenseService licenseService;
-    private final NetworkRepository networkRepository;
-    private final ServiceInstanceRepository serviceInstanceRepository;
 
     private static final long CACHE_TTL_MS = 30_000;
     private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
@@ -97,7 +92,6 @@ public class DashboardService {
                 .smfReachable(smfReachable)
                 .upfReachable(upfReachable)
                 .licenseActive(isLicenseActive(tenantId))
-                .networkSummary(buildNetworkSummary(tenantId))
                 .build();
     }
 
@@ -108,16 +102,6 @@ public class DashboardService {
             log.warn("Health check failed: {}", e.getMessage());
             return false;
         }
-    }
-
-    private NetworkSummary buildNetworkSummary(String tenantId) {
-        return NetworkSummary.builder()
-                .totalNetworks(networkRepository.countByTenantId(tenantId))
-                .totalServices(serviceInstanceRepository.countByTenantId(tenantId))
-                .runningServices(serviceInstanceRepository.countByTenantIdAndStatus(tenantId, ServiceStatus.RUNNING))
-                .stoppedServices(serviceInstanceRepository.countByTenantIdAndStatus(tenantId, ServiceStatus.STOPPED))
-                .errorServices(serviceInstanceRepository.countByTenantIdAndStatus(tenantId, ServiceStatus.ERROR))
-                .build();
     }
 
     private boolean isLicenseActive(String tenantId) {
@@ -159,17 +143,6 @@ public class DashboardService {
         private boolean smfReachable;
         private boolean upfReachable;
         private boolean licenseActive;
-        private NetworkSummary networkSummary;
-    }
-
-    @Data
-    @Builder
-    public static class NetworkSummary {
-        private long totalNetworks;
-        private long totalServices;
-        private long runningServices;
-        private long stoppedServices;
-        private long errorServices;
     }
 
     public enum SystemStatus {

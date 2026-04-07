@@ -1,5 +1,6 @@
 package com.opticoms.optinmscore.security;
 
+import com.opticoms.optinmscore.common.exception.JwtInitializationException;
 import com.opticoms.optinmscore.domain.system.model.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -38,11 +39,11 @@ public class JwtService {
     @PostConstruct
     public void init() {
         if (secretKeyString == null || secretKeyString.isBlank() || secretKeyString.length() < 32) {
-            throw new IllegalStateException(
+            throw new JwtInitializationException(
                     "app.security.jwt.secret must be set and at least 32 characters long");
         }
         if (secretKeyString.equals(masterKeyString)) {
-            throw new IllegalStateException(
+            throw new JwtInitializationException(
                     "JWT_SECRET and ENCRYPTION_SECRET must be different values. " +
                     "Using the same secret for both is a security risk.");
         }
@@ -51,10 +52,10 @@ public class JwtService {
             byte[] keyBytes = digest.digest(secretKeyString.getBytes(StandardCharsets.UTF_8));
             this.secretKey = Keys.hmacShaKeyFor(keyBytes);
             log.info("JWT signing key initialized successfully (SHA-256 derived, 256-bit)");
-        } catch (IllegalStateException e) {
+        } catch (JwtInitializationException e) {
             throw e;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to initialize JWT signing key", e);
+            throw new JwtInitializationException("Failed to initialize JWT signing key", e);
         }
     }
 

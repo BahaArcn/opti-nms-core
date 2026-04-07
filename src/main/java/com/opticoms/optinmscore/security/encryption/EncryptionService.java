@@ -1,5 +1,6 @@
 package com.opticoms.optinmscore.security.encryption;
 
+import com.opticoms.optinmscore.common.exception.EncryptionException;
 import com.opticoms.optinmscore.config.encryption.EncryptionMetadata;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -45,7 +46,7 @@ public class EncryptionService {
     @PostConstruct
     public void init() {
         if (masterKeyString == null || masterKeyString.isBlank()) {
-            throw new RuntimeException(
+            throw new EncryptionException(
                     "app.security.master-key is not configured. " +
                     "Application cannot start without a valid encryption key.");
         }
@@ -57,7 +58,7 @@ public class EncryptionService {
             byte[] keyBytes = factory.generateSecret(spec).getEncoded();
             this.secretKey = new SecretKeySpec(keyBytes, "AES");
         } catch (Exception e) {
-            throw new RuntimeException("Could not initialize encryption key", e);
+            throw new EncryptionException("Could not initialize encryption key", e);
         }
     }
 
@@ -95,7 +96,7 @@ public class EncryptionService {
 
             return Base64.getEncoder().encodeToString(byteBuffer.array());
         } catch (Exception e) {
-            throw new RuntimeException("Error while encrypting data", e);
+            throw new EncryptionException("Error while encrypting data", e);
         }
     }
 
@@ -116,7 +117,7 @@ public class EncryptionService {
             }
             return hex.toString();
         } catch (Exception e) {
-            throw new RuntimeException("Error while hashing data", e);
+            throw new EncryptionException("Error while hashing data", e);
         }
     }
 
@@ -141,7 +142,7 @@ public class EncryptionService {
             return new String(plainTextBytes, StandardCharsets.UTF_8);
 
         } catch (Exception e) {
-            throw new RuntimeException("Error while decrypting data. Key might be wrong or data corrupted.", e);
+            throw new EncryptionException("Error while decrypting data. Key might be wrong or data corrupted.", e);
         }
     }
 }

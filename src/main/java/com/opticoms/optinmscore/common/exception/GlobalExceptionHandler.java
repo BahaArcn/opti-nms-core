@@ -164,6 +164,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(error);
     }
 
+    @ExceptionHandler(EncryptionException.class)
+    public ResponseEntity<ErrorResponse> handleEncryptionException(EncryptionException ex) {
+        log.error("Encryption error: {}", ex.getMessage());
+        ErrorResponse error = ErrorResponse.builder()
+                .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                .error("Encryption Error")
+                .message("A cryptographic operation failed. Please contact the administrator.")
+                .timestamp(Instant.now().toString())
+                .build();
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
         log.error("Unexpected error occurred: {} - {}", ex.getClass().getName(), ex.getMessage(), ex);

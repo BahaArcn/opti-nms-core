@@ -47,7 +47,7 @@ public class NssfYamlRenderer {
         root.put("logger", logger);
 
         // ── global.max ──────────────────────────────────────────────────────
-        // LLD Tablo 3: Max-Nbr-UEs + Max-Nbr-NBs → YAML files: ALL
+        // LLD Table 3: Max-Nbr-UEs + Max-Nbr-NBs → YAML files: ALL
         Map<String, Object> globalSection = new LinkedHashMap<>();
         Map<String, Object> maxMap = new LinkedHashMap<>();
         maxMap.put("ue", global.getMaxSupportedDevices());
@@ -89,7 +89,7 @@ public class NssfYamlRenderer {
         client.put("scp", scpList);
 
         // NSI: one entry per slice → target NRF
-        // LLD Tablo 5: Slice-List (SST/SD) → nssf.yaml
+        // LLD Table 5: Slice-List (SST/SD) → nssf.yaml
         List<Map<String, Object>> nsiList = new ArrayList<>();
         for (AmfConfig.Slice slice : amf.getSupportedSlices()) {
             Map<String, Object> nsiEntry = new LinkedHashMap<>();

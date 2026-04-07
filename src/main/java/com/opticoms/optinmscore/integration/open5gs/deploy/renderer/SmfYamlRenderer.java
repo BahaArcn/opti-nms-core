@@ -60,7 +60,7 @@ public class SmfYamlRenderer {
         root.put("logger", logger);
 
         // ── global.max ──────────────────────────────────────────────────────
-        // LLD Tablo 3: Max-Nbr-UEs + Max-Nbr-NBs → YAML files: ALL
+        // LLD Table 3: Max-Nbr-UEs + Max-Nbr-NBs → YAML files: ALL
         Map<String, Object> globalSection = new LinkedHashMap<>();
         Map<String, Object> maxMap = new LinkedHashMap<>();
         maxMap.put("ue", global.getMaxSupportedDevices());
@@ -109,11 +109,11 @@ public class SmfYamlRenderer {
         smfSection.put("freeDiameter", "/open5gs/install/etc/freeDiameter/smf.conf");
 
         // security_indication: 5G user-plane security indication
-        // LLD Tablo 5: Sec-ind-5g → smf.yaml
+        // LLD Table 5: Sec-ind-5g → smf.yaml
         smfSection.put("security_indication", buildSecurityIndicationSection(smf));
 
         // info: slice ↔ DNN mapping
-        // LLD Tablo 5: Slice-List + Dnn-List → smf.yaml
+        // LLD Table 5: Slice-List + Dnn-List → smf.yaml
         smfSection.put("info", buildInfoSection(smf));
 
         root.put("smf", smfSection);
@@ -242,7 +242,7 @@ public class SmfYamlRenderer {
     }
 
     private Map<String, Object> buildSecurityIndicationSection(SmfConfig smf) {
-        // LLD Tablo 5: Sec-ind-5g
+        // LLD Table 5: Sec-ind-5g
         // RequirementLevel enum → lowercase string (REQUIRED→required, NOT_NEEDED→not-needed)
         Map<String, Object> secInd = new LinkedHashMap<>();
         secInd.put("integrity_protection_indication",
